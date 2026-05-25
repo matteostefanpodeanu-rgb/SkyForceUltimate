@@ -12,16 +12,21 @@ module.exports = {
         .setRequired(true)
         .addChoices(
           { name: '📋 Canale Resoconti — dove vengono inviati i resoconti compilati', value: 'resoconto' },
-          { name: '🔔 Canale Reminder — dove il bot manda il reminder domenicale', value: 'reminder' }
+          { name: '🔔 Canale Reminder — dove il bot manda il reminder domenicale',    value: 'reminder'  }
         ))
     .addChannelOption(opt =>
       opt.setName('canale')
         .setDescription('Il canale da impostare')
-        .setRequired(true)),
+        .setRequired(true))
+    .addRoleOption(opt =>
+      opt.setName('ruolo_ping')
+        .setDescription('Ruolo da pingare nei reminder (opzionale — solo per il canale reminder)')
+        .setRequired(false)),
 
   async execute(interaction) {
-    const tipo = interaction.options.getString('tipo');
-    const canale = interaction.options.getChannel('canale');
+    const tipo      = interaction.options.getString('tipo');
+    const canale    = interaction.options.getChannel('canale');
+    const ruoloPing = interaction.options.getRole('ruolo_ping');
 
     const db = readDB();
 
@@ -29,16 +34,30 @@ module.exports = {
       db.resocontoChannel = canale.id;
     } else {
       db.reminderChannel = canale.id;
+      // Salva il ruolo di ping solo se fornito, altrimenti lascia invariato
+      if (ruoloPing) {
+        db.reminderPingRole = ruoloPing.id;
+      }
     }
 
     writeDB(db);
 
-    const nomi = { resoconto: '📋 Canale Resoconti', reminder: '🔔 Canale Reminder' };
+    const nomi = {
+      resoconto: '📋 Canale Resoconti',
+      reminder:  '🔔 Canale Reminder'
+    };
+
+    let desc = `**${nomi[tipo]}** impostato su <#${canale.id}>`;
+    if (tipo === 'reminder' && ruoloPing) {
+      desc += `\n🏷️ **Ruolo ping reminder:** <@&${ruoloPing.id}>`;
+    } else if (tipo === 'reminder' && db.reminderPingRole) {
+      desc += `\n🏷️ **Ruolo ping attuale:** <@&${db.reminderPingRole}>`;
+    }
 
     const embed = new EmbedBuilder()
       .setColor(0x00FF88)
       .setTitle('✅ Canale Configurato')
-      .setDescription(`**${nomi[tipo]}** impostato su <#${canale.id}>`)
+      .setDescription(desc)
       .setFooter({ text: 'SkyForce Ultimate Chain' })
       .setTimestamp();
 
