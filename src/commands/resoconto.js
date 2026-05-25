@@ -21,12 +21,14 @@ module.exports = {
   async execute(interaction) {
     const db = readDB();
 
-    // Trova il server associato a questo utente
-    const serverEntry = Object.entries(db.servers).find(
-      ([, srv]) => srv.ownerId === interaction.user.id
+    // Trova tutti i server associati a questo utente (può essere owner di più server)
+    const serverEntries = Object.entries(db.servers).filter(
+      ([, srv]) => Array.isArray(srv.ownerIds)
+        ? srv.ownerIds.includes(interaction.user.id)
+        : srv.ownerId === interaction.user.id
     );
 
-    if (!serverEntry) {
+    if (serverEntries.length === 0) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
           .setColor(0xFF4444)
@@ -49,9 +51,10 @@ module.exports = {
       });
     }
 
-    const [, serverData] = serverEntry;
+    // Usa il primo server trovato
+    const [, serverData] = serverEntries[0];
 
-    // Step 1: Seleziona valutazione attività
+    // ── Step 1: Seleziona valutazione attività ──────────────────────────────
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`attivita_${interaction.user.id}`)
       .setPlaceholder('Come valuti l\'attività del tuo server questa settimana?')
@@ -98,7 +101,7 @@ module.exports = {
       ephemeral: true
     });
 
-    // Collector per il menu di valutazione
+    // ── Collector per il menu di valutazione ───────────────────────────────
     const selectCollector = reply.createMessageComponentCollector({
       componentType: ComponentType.StringSelect,
       time: 120000
@@ -109,11 +112,13 @@ module.exports = {
 
       const valutazione = i.values[0];
 
-      // Step 2: Modal per partnership e miglioramenti
+      // ── Step 2: Modal con partnership (richiesto), valutazione già scelta,
+      //           e miglioramento (opzionale) ──────────────────────────────
       const modal = new ModalBuilder()
         .setCustomId(`resoconto_modal_${interaction.user.id}`)
-        .setTitle(`Resoconto — ${serverData.nome}`);
+        .setTitle(`Resoconto — ${serverData.nome.slice(0, 40)}`);
 
+      // Campo 1: Numero partnership (obbligatorio)
       const partnershipInput = new TextInputBuilder()
         .setCustomId('partnership')
         .setLabel('Quante partnership hai fatto questa settimana?')
@@ -123,122 +128,101 @@ module.exports = {
         .setMaxLength(4)
         .setRequired(true);
 
-      const miglioramentoInput = new TextInputBuilder()
-        .setCustomId('miglioramento')
-        .setLabel('Come pensi di migliorare l\'attività?')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Descrivi le tue idee e i tuoi piani per la prossima settimana...')
-        .setMinLength(10)
-        .setMaxLength(1000)
+      // Campo 2: Come reputi l'attività (obbligatorio — riepilogo della scelta)
+      const attivitaInput = new TextInputBuilder()
+        .setCustomId('attivita_recap')
+        .setLabel('Come reputi l\'attività? (già selezionata)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(valutazione)
+        .setMinLength(1)
+        .setMaxLength(20)
         .setRequired(true);
 
-      const noteInput = new TextInputBuilder()
-        .setCustomId('note')
-        .setLabel('Note aggiuntive (opzionale)')
+      // Campo 3: Cosa farai per migliorare (opzionale)
+      const miglioramentoInput = new TextInputBuilder()
+        .setCustomId('miglioramento')
+        .setLabel('Cosa farai per migliorare? (opzionale)')
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Qualsiasi altra informazione che vuoi comunicare...')
-        .setMaxLength(500)
+        .setPlaceholder('Descrivi i tuoi piani per la prossima settimana... (opzionale)')
+        .setMaxLength(1000)
         .setRequired(false);
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(partnershipInput),
-        new ActionRowBuilder().addComponents(miglioramentoInput),
-        new ActionRowBuilder().addComponents(noteInput)
+        new ActionRowBuilder().addComponents(attivitaInput),
+        new ActionRowBuilder().addComponents(miglioramentoInput)
       );
 
       await i.showModal(modal);
 
-      // Aspetta la risposta del modal
+      // ── Aspetta la risposta del modal ──────────────────────────────────
       try {
         const modalSubmit = await i.awaitModalSubmit({
           time: 300000,
           filter: m => m.customId === `resoconto_modal_${interaction.user.id}`
         });
 
-        const partnership = modalSubmit.fields.getTextInputValue('partnership');
-        const miglioramento = modalSubmit.fields.getTextInputValue('miglioramento');
-        const note = modalSubmit.fields.getTextInputValue('note');
+        const partnership    = modalSubmit.fields.getTextInputValue('partnership').trim();
+        const attivitaRecap  = modalSubmit.fields.getTextInputValue('attivita_recap').trim().toUpperCase();
+        const miglioramento  = modalSubmit.fields.getTextInputValue('miglioramento').trim();
 
-        // Formatta la valutazione con emoji
+        // Usa il valore del modal come valutazione definitiva (il menu potrebbe essere ignorato)
+        const valutazioneFinale = ['SCARSA','SUFFICIENTE','BUONA','OTTIMA'].includes(attivitaRecap)
+          ? attivitaRecap
+          : valutazione;
+
         const valutazioneMap = {
-          'SCARSA': '🔴 SCARSA',
+          'SCARSA':      '🔴 SCARSA',
           'SUFFICIENTE': '🟡 SUFFICIENTE',
-          'BUONA': '🟢 BUONA',
-          'OTTIMA': '🌟 OTTIMA'
+          'BUONA':       '🟢 BUONA',
+          'OTTIMA':      '🌟 OTTIMA'
         };
 
         const coloriMap = {
-          'SCARSA': 0xFF4444,
+          'SCARSA':      0xFF4444,
           'SUFFICIENTE': 0xFFAA00,
-          'BUONA': 0x00CC44,
-          'OTTIMA': 0x00D4FF
+          'BUONA':       0x00CC44,
+          'OTTIMA':      0x00D4FF
         };
 
         // Ottieni data italiana
         const now = new Date();
         const dataItaliana = now.toLocaleDateString('it-IT', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
           timeZone: 'Europe/Rome'
         });
         const oraItaliana = now.toLocaleTimeString('it-IT', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Rome'
+          hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
         });
 
-        // Embed finale da inviare nel canale resoconti
+        // ── Embed finale ──────────────────────────────────────────────────
         const resocontoEmbed = new EmbedBuilder()
-          .setColor(coloriMap[valutazione])
+          .setColor(coloriMap[valutazioneFinale] ?? 0x00D4FF)
           .setTitle(`📊 Resoconto Settimanale — ${serverData.nome}`)
           .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
           .addFields(
-            {
-              name: '🏠 Server',
-              value: `**${serverData.nome}**`,
-              inline: true
-            },
-            {
-              name: '👑 Owner',
-              value: `<@${interaction.user.id}>`,
-              inline: true
-            },
-            {
-              name: '📅 Data Compilazione',
-              value: `${dataItaliana} alle **${oraItaliana}**`,
-              inline: false
-            },
-            {
-              name: '🤝 Partnership Effettuate',
-              value: `**${partnership}** questa settimana`,
-              inline: true
-            },
-            {
-              name: '📈 Valutazione Attività',
-              value: `**${valutazioneMap[valutazione]}**`,
-              inline: true
-            },
-            {
-              name: '💡 Piano di Miglioramento',
-              value: miglioramento,
-              inline: false
-            }
+            { name: '🏠 Server',               value: `**${serverData.nome}**`,                        inline: true },
+            { name: '👑 Owner',                value: `<@${interaction.user.id}>`,                     inline: true },
+            { name: '📅 Data Compilazione',    value: `${dataItaliana} alle **${oraItaliana}**`,       inline: false },
+            { name: '🤝 Partnership Effettuate', value: `**${partnership}** questa settimana`,          inline: true },
+            { name: '📈 Valutazione Attività', value: `**${valutazioneMap[valutazioneFinale] ?? valutazioneFinale}**`, inline: true }
           )
           .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
           .setTimestamp();
 
-        if (note && note.trim().length > 0) {
+        // Campo miglioramento solo se compilato
+        if (miglioramento.length > 0) {
           resocontoEmbed.addFields({
-            name: '📝 Note Aggiuntive',
-            value: note,
+            name: '💡 Piano di Miglioramento',
+            value: miglioramento,
             inline: false
           });
         }
 
         // Invia nel canale resoconti
-        const canaleResoconto = await interaction.guild.channels.fetch(db.resocontoChannel).catch(() => null);
+        const canaleResoconto = await interaction.guild.channels
+          .fetch(db.resocontoChannel)
+          .catch(() => null);
 
         if (canaleResoconto) {
           await canaleResoconto.send({ embeds: [resocontoEmbed] });
@@ -250,22 +234,17 @@ module.exports = {
           .setTitle('✅ Resoconto Inviato!')
           .setDescription(
             `Il tuo resoconto per **${serverData.nome}** è stato inviato con successo!\n\n` +
-            `📊 Valutazione: **${valutazioneMap[valutazione]}**\n` +
+            `📊 Valutazione: **${valutazioneMap[valutazioneFinale] ?? valutazioneFinale}**\n` +
             `🤝 Partnership: **${partnership}**\n\n` +
             `Grazie per aver compilato il resoconto settimanale! 💪`
           )
           .setFooter({ text: 'SkyForce Ultimate Chain' })
           .setTimestamp();
 
-        await modalSubmit.reply({
-          embeds: [confermaEmbed],
-          ephemeral: true
-        });
-
+        await modalSubmit.reply({ embeds: [confermaEmbed], ephemeral: true });
         selectCollector.stop();
 
       } catch (err) {
-        // Modal scaduto o errore
         if (err.code === 'InteractionCollectorError') {
           await interaction.editReply({
             embeds: [new EmbedBuilder()
@@ -274,7 +253,7 @@ module.exports = {
               .setDescription('Il resoconto è scaduto. Riusa `/resoconto` per ricominciare.')
             ],
             components: []
-          });
+          }).catch(() => {});
         }
       }
     });
