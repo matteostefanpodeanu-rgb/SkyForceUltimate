@@ -1,11 +1,11 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const logger = require('./utils/logger');
 
 // ─── Validazione variabili d'ambiente ───────────────────────────────────────
-if (!process.env.DISCORD_TOKEN) {
-  console.error('❌ DISCORD_TOKEN mancante nelle variabili d\'ambiente!');
+if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID || !process.env.GUILD_ID) {
+  console.error('❌ Variabili d\'ambiente mancanti! Controlla DISCORD_TOKEN, CLIENT_ID e GUILD_ID.');
   process.exit(1);
 }
 
@@ -23,13 +23,30 @@ client.commands = new Collection();
 // ─── Caricamento comandi ────────────────────────────────────────────────────
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+const commandsData = [];
 
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
   const command = require(filePath);
   if ('data' in command && 'execute' in command) {
     client.commands.set(command.data.name, command);
+    commandsData.push(command.data.toJSON());
     console.log(`📦 Comando caricato: /${command.data.name}`);
+  }
+}
+
+// ─── Deploy automatico comandi slash ────────────────────────────────────────
+async function deployCommands() {
+  try {
+    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+    console.log('🔄 Registrazione comandi slash in corso...');
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body: commandsData }
+    );
+    console.log(`✅ ${commandsData.length} comandi slash registrati automaticamente!`);
+  } catch (error) {
+    console.error('❌ Errore nella registrazione dei comandi:', error.message);
   }
 }
 
@@ -57,9 +74,12 @@ client.on('shardError', async (error) => {
   await logger.errore('Errore WebSocket', `\`\`\`${error.message}\`\`\``);
 });
 
-// ─── Login ──────────────────────────────────────────────────────────────────
+// ─── Login + deploy comandi ──────────────────────────────────────────────────
 client.login(process.env.DISCORD_TOKEN)
-  .then(() => console.log('🚀 SkyForce Ultimate avviato!'))
+  .then(async () => {
+    console.log('🚀 SkyForce Ultimate avviato!');
+    await deployCommands();
+  })
   .catch(async err => {
     console.error('❌ Errore nel login:', err.message);
     process.exit(1);
@@ -68,10 +88,7 @@ client.login(process.env.DISCORD_TOKEN)
 // ─── Errori non gestiti (crash) ──────────────────────────────────────────────
 process.on('unhandledRejection', async (error) => {
   console.error('⚠️ Unhandled Promise Rejection:', error);
-  await logger.errore(
-    'Unhandled Promise Rejection',
-    `\`\`\`${String(error).slice(0, 800)}\`\`\``
-  );
+  await logger.errore('Unhandled Promise Rejection', `\`\`\`${String(error).slice(0, 800)}\`\`\``);
 });
 
 process.on('uncaughtException', async (error) => {
@@ -81,17 +98,13 @@ process.on('uncaughtException', async (error) => {
     `\`\`\`${error.message}\`\`\``,
     [{ name: '🔍 Stack', value: `\`\`\`${(error.stack || '').slice(0, 800)}\`\`\`` }]
   );
-  // Piccola attesa per dare tempo all'embed di essere inviato prima del crash
   setTimeout(() => process.exit(1), 2000);
 });
 
 // ─── Log spegnimento pulito (SIGTERM da Render) ──────────────────────────────
 process.on('SIGTERM', async () => {
   console.log('🔴 SIGTERM ricevuto — spegnimento in corso...');
-  await logger.spegnimento(
-    'Bot Spento (SIGTERM)',
-    'Render ha richiesto lo spegnimento del bot. Probabilmente è in corso un nuovo deploy.'
-  );
+  await logger.spegnimento('Bot Spento (SIGTERM)', 'Render ha richiesto lo spegnimento. Probabilmente è in corso un nuovo deploy.');
   setTimeout(() => process.exit(0), 2000);
 });
 
