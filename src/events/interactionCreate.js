@@ -5,25 +5,20 @@ module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction) {
 
-    // Gestione bottone reminder → lancia il comando resoconto
+    // ── Bottone reminder: non rilanciare execute, solo avvisa l'utente ──────
     if (interaction.isButton() && interaction.customId === 'apri_resoconto_reminder') {
-      const resocontoCommand = interaction.client.commands.get('resoconto');
-      if (resocontoCommand) {
-        try {
-          await resocontoCommand.execute(interaction);
-        } catch (err) {
-          console.error('Errore nel comando resoconto da bottone:', err);
-          await logger.errore('Errore Bottone Resoconto', err.message, [
-            { name: '👤 Utente', value: `<@${interaction.user.id}>`, inline: true },
-          ]);
-        }
-      }
+      await interaction.reply({
+        content: '📊 Usa il comando `/resoconto` per compilare il tuo resoconto settimanale!',
+        ephemeral: true
+      });
       return;
     }
 
-    // Gestione comandi slash
+    // ── Ignora interazioni non-slash (select menu, modal, altri bottoni) ────
+    // Vengono già gestiti dai collector dentro i singoli comandi
     if (!interaction.isChatInputCommand()) return;
 
+    // ── Comandi slash ────────────────────────────────────────────────────────
     const command = interaction.client.commands.get(interaction.commandName);
 
     if (!command) {
@@ -31,7 +26,6 @@ module.exports = {
       return;
     }
 
-    // Log utilizzo comando
     await logger.comando(
       `Comando /${interaction.commandName}`,
       null,
