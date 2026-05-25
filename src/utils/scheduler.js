@@ -2,14 +2,7 @@ const cron = require('node-cron');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { readDB } = require('../utils/database');
 
-/**
- * Domenica alle 10:00 ora italiana → primo reminder.
- * Domenica alle 17:00 ora italiana → ultimo avviso (1h prima scadenza).
- * Il ruolo da pingare viene letto da db.reminderPingRole.
- */
-
 function startReminderScheduler(client) {
-  // 10:00 ora italiana
   cron.schedule('0 8,9 * * 0', async () => {
     const oraItaliana = new Intl.DateTimeFormat('it-IT', {
       hour: 'numeric', timeZone: 'Europe/Rome'
@@ -18,7 +11,6 @@ function startReminderScheduler(client) {
     await sendReminder(client);
   });
 
-  // 17:00 ora italiana
   cron.schedule('0 15,16 * * 0', async () => {
     const oraItaliana = new Intl.DateTimeFormat('it-IT', {
       hour: 'numeric', timeZone: 'Europe/Rome'
@@ -30,27 +22,16 @@ function startReminderScheduler(client) {
   console.log('✅ Scheduler reminder domenicale attivo.');
 }
 
-// ── Costruisce la stringa di ping (ruolo + tutti gli owner) ─────────────────
 function buildPingString(db) {
   const parts = [];
-
-  // Ruolo configurato (se presente)
-  if (db.reminderPingRole) {
-    parts.push(`<@&${db.reminderPingRole}>`);
-  }
-
-  // Menzione individuale di ogni owner
-  const servers = Object.entries(db.servers);
-  if (servers.length > 0) {
-    const ownerIds = new Set();
-    for (const [, s] of servers) {
-      // Supporta sia ownerIds (array) che il vecchio ownerId (stringa)
+  for (const [, s] of Object.entries(db.servers)) {
+    if (s.roleId) {
+      parts.push(`<@&${s.roleId}>`);
+    } else {
       const ids = Array.isArray(s.ownerIds) ? s.ownerIds : [s.ownerId];
-      ids.forEach(id => ownerIds.add(id));
+      ids.forEach(id => parts.push(`<@${id}>`));
     }
-    ownerIds.forEach(id => parts.push(`<@${id}>`));
   }
-
   return parts.join(' ');
 }
 
@@ -67,8 +48,6 @@ async function sendReminder(client) {
     console.log('⚠️ Canale reminder non trovato.');
     return;
   }
-
-  const pingString = buildPingString(db);
 
   const embed = new EmbedBuilder()
     .setColor(0x00D4FF)
@@ -92,9 +71,8 @@ async function sendReminder(client) {
       .setStyle(ButtonStyle.Primary)
   );
 
-  // Ping nella stessa riga del messaggio (content), embed separato
   await channel.send({
-    content: pingString || undefined,
+    content: buildPingString(db) || undefined,
     embeds: [embed],
     components: [button]
   });
@@ -109,8 +87,6 @@ async function sendFinalReminder(client) {
 
   const channel = await client.channels.fetch(db.reminderChannel).catch(() => null);
   if (!channel) return;
-
-  const pingString = buildPingString(db);
 
   const embed = new EmbedBuilder()
     .setColor(0xFF8800)
@@ -132,7 +108,7 @@ async function sendFinalReminder(client) {
   );
 
   await channel.send({
-    content: pingString || undefined,
+    content: buildPingString(db) || undefined,
     embeds: [embed],
     components: [button]
   });
