@@ -9,7 +9,6 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ComponentType
 } = require('discord.js');
 const { readDB } = require('../utils/database');
 
@@ -52,8 +51,8 @@ module.exports = {
 
     const [, serverData] = serverEntries[0];
 
-    // ── Step 1: Bottone per aprire il primo Modal ───────────────────────────
-    const reply = await interaction.reply({
+    // ── Step 1: Mostra bottone "Inizia Resoconto" ───────────────────────────
+    await interaction.reply({
       embeds: [new EmbedBuilder()
         .setColor(0x00D4FF)
         .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
@@ -75,209 +74,206 @@ module.exports = {
       ephemeral: true
     });
 
-    // ── Collector bottone → Modal partnership ───────────────────────────────
-    const btnCollector = reply.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 120000,
-      filter: i => i.customId === `apri_modal_${interaction.user.id}` && i.user.id === interaction.user.id
-    });
+    // ── Aspetta click bottone ───────────────────────────────────────────────
+    let btnInteraction;
+    try {
+      btnInteraction = await interaction.channel.awaitMessageComponent({
+        filter: i => i.customId === `apri_modal_${interaction.user.id}` && i.user.id === interaction.user.id,
+        time: 120000
+      });
+    } catch {
+      await interaction.editReply({ components: [] }).catch(() => {});
+      return;
+    }
 
-    btnCollector.on('collect', async i => {
+    // ── Modal 1: Partnership ────────────────────────────────────────────────
+    const modal1 = new ModalBuilder()
+      .setCustomId(`partnership_modal_${interaction.user.id}`)
+      .setTitle('Resoconto — Partnership');
 
-      // ── Modal 1: Partnership ──────────────────────────────────────────────
-      const modal1 = new ModalBuilder()
-        .setCustomId(`partnership_modal_${interaction.user.id}`)
-        .setTitle('Resoconto — Partnership');
+    modal1.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('partnership')
+          .setLabel('Quante partnership hai fatto questa settimana?')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Es: 3')
+          .setMinLength(1)
+          .setMaxLength(4)
+          .setRequired(true)
+      )
+    );
 
-      modal1.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('partnership')
-            .setLabel('Quante partnership hai fatto questa settimana?')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: 3')
-            .setMinLength(1)
-            .setMaxLength(4)
-            .setRequired(true)
+    await btnInteraction.showModal(modal1);
+
+    // Rimuovi il bottone dal messaggio originale
+    await interaction.editReply({ components: [] }).catch(() => {});
+
+    // ── Aspetta submit Modal 1 ──────────────────────────────────────────────
+    let modalSubmit1;
+    try {
+      modalSubmit1 = await btnInteraction.awaitModalSubmit({
+        time: 300000,
+        filter: m => m.customId === `partnership_modal_${interaction.user.id}` && m.user.id === interaction.user.id
+      });
+    } catch {
+      await interaction.editReply({
+        embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
+        components: []
+      }).catch(() => {});
+      return;
+    }
+
+    const partnership = modalSubmit1.fields.getTextInputValue('partnership').trim();
+
+    // ── Step 2: Menu valutazione ────────────────────────────────────────────
+    await modalSubmit1.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x00D4FF)
+        .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
+        .setDescription(
+          `**Step 2/3** — Come reputi l'attività del tuo server questa settimana?\n\n` +
+          `🤝 Partnership: **${partnership}**`
         )
-      );
-
-      await i.showModal(modal1);
-
-      // ── Aspetta submit Modal 1 ────────────────────────────────────────────
-      let modalSubmit1;
-      try {
-        modalSubmit1 = await i.awaitModalSubmit({
-          time: 300000,
-          filter: m => m.customId === `partnership_modal_${interaction.user.id}`
-        });
-      } catch {
-        await interaction.editReply({
-          embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
-          components: []
-        }).catch(() => {});
-        return;
-      }
-
-      const partnership = modalSubmit1.fields.getTextInputValue('partnership').trim();
-
-      // ── Step 2: Menu valutazione ──────────────────────────────────────────
-      const step2Reply = await modalSubmit1.reply({
-        embeds: [new EmbedBuilder()
-          .setColor(0x00D4FF)
-          .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
-          .setDescription(
-            `**Step 2/3** — Come reputi l'attività del tuo server questa settimana?\n\n` +
-            `🤝 Partnership: **${partnership}**`
-          )
-          .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
-          .setTimestamp()
-        ],
-        components: [new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`attivita_${interaction.user.id}`)
-            .setPlaceholder('Seleziona la valutazione...')
-            .addOptions([
-              new StringSelectMenuOptionBuilder().setLabel('🔴 SCARSA')      .setDescription('Poca attività, pochi progressi').setValue('SCARSA'),
-              new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, margine di miglioramento').setValue('SUFFICIENTE'),
-              new StringSelectMenuOptionBuilder().setLabel('🟢 BUONA')       .setDescription('Buona attività, obiettivi raggiunti').setValue('BUONA'),
-              new StringSelectMenuOptionBuilder().setLabel('🌟 OTTIMA')      .setDescription('Settimana eccellente, grandi risultati!').setValue('OTTIMA'),
-            ])
-        )],
-        ephemeral: true
-      });
-
-      // ── Collector menu valutazione ────────────────────────────────────────
-      const selectCollector = step2Reply.createMessageComponentCollector({
-        componentType: ComponentType.StringSelect,
-        time: 120000,
-        filter: s => s.customId === `attivita_${interaction.user.id}` && s.user.id === interaction.user.id
-      });
-
-      selectCollector.on('collect', async s => {
-        const valutazione = s.values[0];
-
-        // ── Modal 2: Miglioramento (opzionale) ───────────────────────────────
-        const modal2 = new ModalBuilder()
-          .setCustomId(`miglioramento_modal_${interaction.user.id}`)
-          .setTitle('Resoconto — Miglioramento');
-
-        modal2.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId('miglioramento')
-              .setLabel('Cosa farai per migliorare? (opzionale)')
-              .setStyle(TextInputStyle.Paragraph)
-              .setPlaceholder('Descrivi i tuoi piani per la prossima settimana...')
-              .setMaxLength(1000)
-              .setRequired(false)
-          )
-        );
-
-        await s.showModal(modal2);
-
-        // ── Aspetta submit Modal 2 ──────────────────────────────────────────
-        let modalSubmit2;
-        try {
-          modalSubmit2 = await s.awaitModalSubmit({
-            time: 300000,
-            filter: m => m.customId === `miglioramento_modal_${interaction.user.id}`
-          });
-        } catch {
-          await modalSubmit1.editReply({
-            embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
-            components: []
-          }).catch(() => {});
-          return;
-        }
-
-        const miglioramento = modalSubmit2.fields.getTextInputValue('miglioramento').trim();
-
-        const valutazioneMap = {
-          'SCARSA':      '🔴 SCARSA',
-          'SUFFICIENTE': '🟡 SUFFICIENTE',
-          'BUONA':       '🟢 BUONA',
-          'OTTIMA':      '🌟 OTTIMA'
-        };
-        const coloriMap = {
-          'SCARSA':      0xFF4444,
-          'SUFFICIENTE': 0xFFAA00,
-          'BUONA':       0x00CC44,
-          'OTTIMA':      0x00D4FF
-        };
-
-        const now = new Date();
-        const dataItaliana = now.toLocaleDateString('it-IT', {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-          timeZone: 'Europe/Rome'
-        });
-        const oraItaliana = now.toLocaleTimeString('it-IT', {
-          hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
-        });
-
-        // ── Embed finale ────────────────────────────────────────────────────
-        const resocontoEmbed = new EmbedBuilder()
-          .setColor(coloriMap[valutazione] ?? 0x00D4FF)
-          .setTitle(`📊 Resoconto Settimanale — ${serverData.nome}`)
-          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: '🏠 Server',                 value: `**${serverData.nome}**`,                            inline: true  },
-            { name: '👑 Owner',                  value: `<@${interaction.user.id}>`,                         inline: true  },
-            { name: '📅 Data Compilazione',      value: `${dataItaliana} alle **${oraItaliana}**`,           inline: false },
-            { name: '🤝 Partnership Effettuate', value: `**${partnership}** questa settimana`,               inline: true  },
-            { name: '📈 Valutazione Attività',   value: `**${valutazioneMap[valutazione] ?? valutazione}**`, inline: true  }
-          )
-          .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
-          .setTimestamp();
-
-        if (miglioramento.length > 0) {
-          resocontoEmbed.addFields({
-            name: '💡 Piano di Miglioramento',
-            value: miglioramento,
-            inline: false
-          });
-        }
-
-        const canaleResoconto = await interaction.guild.channels
-          .fetch(db.resocontoChannel)
-          .catch(() => null);
-
-        if (canaleResoconto) {
-          await canaleResoconto.send({ embeds: [resocontoEmbed] });
-        }
-
-        // ── Conferma ────────────────────────────────────────────────────────
-        await modalSubmit2.reply({
-          embeds: [new EmbedBuilder()
-            .setColor(0x00FF88)
-            .setTitle('✅ Resoconto Inviato!')
-            .setDescription(
-              `Il tuo resoconto per **${serverData.nome}** è stato inviato!\n\n` +
-              `🤝 Partnership: **${partnership}**\n` +
-              `📊 Valutazione: **${valutazioneMap[valutazione] ?? valutazione}**\n\n` +
-              `Grazie per aver compilato il resoconto settimanale! 💪`
-            )
-            .setFooter({ text: 'SkyForce Ultimate Chain' })
-            .setTimestamp()
-          ],
-          ephemeral: true
-        });
-
-        selectCollector.stop();
-        btnCollector.stop();
-      });
-
-      selectCollector.on('end', collected => {
-        if (collected.size === 0) {
-          modalSubmit1.editReply({ components: [] }).catch(() => {});
-        }
-      });
+        .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
+        .setTimestamp()
+      ],
+      components: [new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`attivita_${interaction.user.id}`)
+          .setPlaceholder('Seleziona la valutazione...')
+          .addOptions([
+            new StringSelectMenuOptionBuilder().setLabel('🔴 SCARSA')      .setDescription('Poca attività, pochi progressi').setValue('SCARSA'),
+            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, margine di miglioramento').setValue('SUFFICIENTE'),
+            new StringSelectMenuOptionBuilder().setLabel('🟢 BUONA')       .setDescription('Buona attività, obiettivi raggiunti').setValue('BUONA'),
+            new StringSelectMenuOptionBuilder().setLabel('🌟 OTTIMA')      .setDescription('Settimana eccellente, grandi risultati!').setValue('OTTIMA'),
+          ])
+      )],
+      ephemeral: true
     });
 
-    btnCollector.on('end', collected => {
-      if (collected.size === 0) {
-        interaction.editReply({ components: [] }).catch(() => {});
-      }
+    // ── Aspetta selezione menu ──────────────────────────────────────────────
+    let selectInteraction;
+    try {
+      selectInteraction = await interaction.channel.awaitMessageComponent({
+        filter: i => i.customId === `attivita_${interaction.user.id}` && i.user.id === interaction.user.id,
+        time: 120000
+      });
+    } catch {
+      await modalSubmit1.editReply({ components: [] }).catch(() => {});
+      return;
+    }
+
+    const valutazione = selectInteraction.values[0];
+
+    // ── Modal 2: Miglioramento (opzionale) ──────────────────────────────────
+    const modal2 = new ModalBuilder()
+      .setCustomId(`miglioramento_modal_${interaction.user.id}`)
+      .setTitle('Resoconto — Miglioramento');
+
+    modal2.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('miglioramento')
+          .setLabel('Cosa farai per migliorare? (opzionale)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Descrivi i tuoi piani per la prossima settimana...')
+          .setMaxLength(1000)
+          .setRequired(false)
+      )
+    );
+
+    await selectInteraction.showModal(modal2);
+
+    // Rimuovi il menu
+    await modalSubmit1.editReply({ components: [] }).catch(() => {});
+
+    // ── Aspetta submit Modal 2 ──────────────────────────────────────────────
+    let modalSubmit2;
+    try {
+      modalSubmit2 = await selectInteraction.awaitModalSubmit({
+        time: 300000,
+        filter: m => m.customId === `miglioramento_modal_${interaction.user.id}` && m.user.id === interaction.user.id
+      });
+    } catch {
+      await modalSubmit1.editReply({
+        embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
+        components: []
+      }).catch(() => {});
+      return;
+    }
+
+    const miglioramento = modalSubmit2.fields.getTextInputValue('miglioramento').trim();
+
+    // ── Costruisci embed finale ─────────────────────────────────────────────
+    const valutazioneMap = {
+      'SCARSA':      '🔴 SCARSA',
+      'SUFFICIENTE': '🟡 SUFFICIENTE',
+      'BUONA':       '🟢 BUONA',
+      'OTTIMA':      '🌟 OTTIMA'
+    };
+    const coloriMap = {
+      'SCARSA':      0xFF4444,
+      'SUFFICIENTE': 0xFFAA00,
+      'BUONA':       0x00CC44,
+      'OTTIMA':      0x00D4FF
+    };
+
+    const now = new Date();
+    const dataItaliana = now.toLocaleDateString('it-IT', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      timeZone: 'Europe/Rome'
+    });
+    const oraItaliana = now.toLocaleTimeString('it-IT', {
+      hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
+    });
+
+    const resocontoEmbed = new EmbedBuilder()
+      .setColor(coloriMap[valutazione] ?? 0x00D4FF)
+      .setTitle(`📊 Resoconto Settimanale — ${serverData.nome}`)
+      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+      .addFields(
+        { name: '🏠 Server',                 value: `**${serverData.nome}**`,                            inline: true  },
+        { name: '👑 Owner',                  value: `<@${interaction.user.id}>`,                         inline: true  },
+        { name: '📅 Data Compilazione',      value: `${dataItaliana} alle **${oraItaliana}**`,           inline: false },
+        { name: '🤝 Partnership Effettuate', value: `**${partnership}** questa settimana`,               inline: true  },
+        { name: '📈 Valutazione Attività',   value: `**${valutazioneMap[valutazione] ?? valutazione}**`, inline: true  }
+      )
+      .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
+      .setTimestamp();
+
+    if (miglioramento.length > 0) {
+      resocontoEmbed.addFields({
+        name: '💡 Piano di Miglioramento',
+        value: miglioramento,
+        inline: false
+      });
+    }
+
+    // ── Invia nel canale resoconti ──────────────────────────────────────────
+    const canaleResoconto = await interaction.guild.channels
+      .fetch(db.resocontoChannel)
+      .catch(() => null);
+
+    if (canaleResoconto) {
+      await canaleResoconto.send({ embeds: [resocontoEmbed] });
+    }
+
+    // ── Conferma all'utente ─────────────────────────────────────────────────
+    await modalSubmit2.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x00FF88)
+        .setTitle('✅ Resoconto Inviato!')
+        .setDescription(
+          `Il tuo resoconto per **${serverData.nome}** è stato inviato!\n\n` +
+          `🤝 Partnership: **${partnership}**\n` +
+          `📊 Valutazione: **${valutazioneMap[valutazione] ?? valutazione}**\n\n` +
+          `Grazie per aver compilato il resoconto settimanale! 💪`
+        )
+        .setFooter({ text: 'SkyForce Ultimate Chain' })
+        .setTimestamp()
+      ],
+      ephemeral: true
     });
   }
 };
