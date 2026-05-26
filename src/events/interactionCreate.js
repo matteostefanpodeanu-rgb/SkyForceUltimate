@@ -16,6 +16,19 @@ module.exports = {
       return;
     }
 
+    // ── Autocomplete (per up-aggiungi, up-rimuovi) ───────────────────────────
+    if (interaction.isAutocomplete()) {
+      const command = interaction.client.commands.get(interaction.commandName);
+      if (command?.autocomplete) {
+        try {
+          await command.autocomplete(interaction);
+        } catch (err) {
+          console.error(`Errore autocomplete /${interaction.commandName}:`, err.message);
+        }
+      }
+      return;
+    }
+
     // ── Ignora tutto ciò che non è un comando slash ──────────────────────────
     if (!interaction.isChatInputCommand()) return;
 
