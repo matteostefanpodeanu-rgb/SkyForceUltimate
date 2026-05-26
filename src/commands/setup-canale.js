@@ -20,10 +20,12 @@ module.exports = {
         .setRequired(true))
     .addRoleOption(opt =>
       opt.setName('ruolo_ping')
-        .setDescription('Ruolo da pingare nei reminder (opzionale — solo per il canale reminder)')
+        .setDescription('Ruolo da pingare nei reminder (opzionale)')
         .setRequired(false)),
 
   async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+
     const tipo      = interaction.options.getString('tipo');
     const canale    = interaction.options.getChannel('canale');
     const ruoloPing = interaction.options.getRole('ruolo_ping');
@@ -34,10 +36,7 @@ module.exports = {
       db.resocontoChannel = canale.id;
     } else {
       db.reminderChannel = canale.id;
-      // Salva il ruolo di ping solo se fornito, altrimenti lascia invariato
-      if (ruoloPing) {
-        db.reminderPingRole = ruoloPing.id;
-      }
+      if (ruoloPing) db.reminderPingRole = ruoloPing.id;
     }
 
     writeDB(db);
@@ -61,6 +60,6 @@ module.exports = {
       .setFooter({ text: 'SkyForce Ultimate Chain' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.editReply({ embeds: [embed] });
   }
 };
