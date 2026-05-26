@@ -1,0 +1,13 @@
+{
+  "servers": {},
+  "resocontoChannel": null,
+  "reminderChannel": null,
+  "valutazioniChannel": null,
+  "logChannel": null,
+  "up": {
+    "messageId": null,
+    "channelId": null,
+    "scores": {}
+  },
+  "valutazioni": []
+}
