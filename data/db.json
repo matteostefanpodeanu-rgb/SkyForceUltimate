@@ -1,5 +1,24 @@
 {
-  "servers": {},
+  "servers": {
+    "🚀≫-oblivion-network-[0.7k]": {
+      "nome": "🚀≫ Oblivion Network [0.7k]",
+      "roleId": "1505986927373844540",
+      "ownerId": "945048838689914942",
+      "ownerTag": "rberna_10",
+      "ownerIds": [
+        "945048838689914942",
+        "742028947117572248",
+        "1312333157684482053"
+      ],
+      "ownerTags": [
+        "rberna_10",
+        "samugabry08",
+        "therealpodea"
+      ],
+      "discordId": "1078670950456893460",
+      "aggiuntoIl": "2026-05-31T15:39:04.128Z"
+    }
+  },
   "resocontoChannel": "1508572547224961116",
   "reminderChannel": "1508572357370052748",
   "valutazioniChannel": null,
