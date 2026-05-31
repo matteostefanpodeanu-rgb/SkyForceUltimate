@@ -163,11 +163,11 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('penalita')
-            .setLabel('Penalità extra (Nessuna se ok)')  // 32 char ✅
+            .setLabel('Penalità extra (lascia vuoto se ok)')  // 36 char ✅
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: Nessuna  oppure  Inattività -5 UP')
+            .setPlaceholder('Es: Inattività -5 UP')
             .setMaxLength(100)
-            .setRequired(true)
+            .setRequired(false)
         )
       );
 
