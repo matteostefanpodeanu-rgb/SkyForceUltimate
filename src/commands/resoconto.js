@@ -207,6 +207,9 @@ module.exports = {
 
     const miglioramento = modalSubmit2.fields.getTextInputValue('miglioramento').trim();
 
+    // Defer subito per evitare Unknown Interaction (timeout 3s Discord)
+    await modalSubmit2.deferReply({ ephemeral: true });
+
     // ── Costruisci embed finale ─────────────────────────────────────────────
     const valutazioneMap = {
       'SCARSA':      '🔴 SCARSA',
@@ -262,7 +265,7 @@ module.exports = {
     }
 
     // ── Conferma all'utente ─────────────────────────────────────────────────
-    await modalSubmit2.reply({
+    await modalSubmit2.editReply({
       embeds: [new EmbedBuilder()
         .setColor(0x00FF88)
         .setTitle('✅ Resoconto Inviato!')
@@ -274,8 +277,7 @@ module.exports = {
         )
         .setFooter({ text: 'SkyForce Ultimate Chain' })
         .setTimestamp()
-      ],
-      ephemeral: true
+      ]
     });
   }
 };
