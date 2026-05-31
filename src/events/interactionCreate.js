@@ -5,6 +5,18 @@ module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction) {
 
+    // ── Autocomplete ─────────────────────────────────────────────────────────
+    if (interaction.isAutocomplete()) {
+      const command = interaction.client.commands.get(interaction.commandName);
+      if (!command?.autocomplete) return;
+      try {
+        await command.autocomplete(interaction);
+      } catch (err) {
+        console.error(`Errore autocomplete ${interaction.commandName}:`, err);
+      }
+      return;
+    }
+
     // ── Bottone reminder ─────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'apri_resoconto_reminder') {
       try {
@@ -25,7 +37,6 @@ module.exports = {
       return;
     }
 
-    // ── Log del comando (fire-and-forget, non blocca l'esecuzione) ───────────
     logger.comando(
       `Comando /${interaction.commandName}`,
       null,
@@ -35,13 +46,11 @@ module.exports = {
       ]
     ).catch(() => {});
 
-    // ── Esecuzione comando ───────────────────────────────────────────────────
     try {
       await command.execute(interaction);
     } catch (error) {
       console.error(`Errore nel comando ${interaction.commandName}:`, error);
 
-      // Log errore (fire-and-forget)
       logger.errore(
         `Errore Comando /${interaction.commandName}`,
         `\`\`\`${error.message}\`\`\``,
@@ -52,12 +61,8 @@ module.exports = {
         ]
       ).catch(() => {});
 
-      // Risposta di errore all'utente — non crashare se l'interazione è scaduta
       try {
-        const errMsg = {
-          content: '❌ Si è verificato un errore nell\'esecuzione del comando.',
-          ephemeral: true
-        };
+        const errMsg = { content: '❌ Si è verificato un errore nell\'esecuzione del comando.', ephemeral: true };
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(errMsg);
         } else {
