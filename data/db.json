@@ -2,7 +2,8 @@
   "servers": {},
   "resocontoChannel": null,
   "reminderChannel": null,
-  "logChannel": null,
+  "valutazioniChannel": null,
+  "logChannel": "1508565544071069858",
   "up": {
     "messageId": null,
     "channelId": null,
