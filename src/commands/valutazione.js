@@ -9,16 +9,12 @@ const {
   TextInputStyle,
 } = require('discord.js');
 const { readDB, writeDB } = require('../utils/database');
-const { aggiornaUPPanel } = require('../utils/upPanel');
+const { aggiornaUPPanel, C_VIOLA, C_RED, C_GREEN, SEP, SEP_THIN } = require('../utils/upPanel');
 
 const REP_ROLE_ID      = '1505984896743637133';
 const VICE_REP_ROLE_ID = '1505986264984191056';
 const MEDAGLIE         = ['🥇', '🥈', '🥉'];
-const SEP              = '━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
-// ── Tabella punti partnership ────────────────────────────────────────────────
-// Restituisce UP da aggiungere (positivi) o penalità (negativi)
-// Minimo settimanale: 35 partnership
 function calcolaUP(partnership) {
   const p = parseInt(partnership) || 0;
   if (p >= 150) return +25;
@@ -28,21 +24,22 @@ function calcolaUP(partnership) {
   if (p >= 60)  return +13;
   if (p >= 50)  return +11;
   if (p >= 40)  return +9;
-  if (p >= 35)  return +8;   // minimo settimanale
-  if (p >= 25)  return -4;   // penalità lieve
-  if (p >= 10)  return -5;   // penalità media
-  return -6;                 // penalità grave (0–9)
+  if (p >= 35)  return +8;
+  if (p >= 25)  return -4;
+  if (p >= 10)  return -5;
+  return -6;
 }
 
-function getUPLabel(up) {
-  if (up > 0) return `✅  **+${up} UP** (guadagnati)`;
-  if (up < 0) return `❌  **${up} UP** (penalità)`;
+function getUPLine(up) {
+  if (up > 0) return `📈  **+${up} UP**  ✅`;
+  if (up < 0) return `📉  **${up} UP**  ❌`;
   return `➖  **0 UP**`;
 }
 
-function getMedagliaPenalita(penalita) {
-  if (!penalita || penalita.trim() === '' || penalita.trim().toLowerCase() === 'nessuna') return '✅  Nessuna';
-  return `⚠️  ${penalita.trim()}`;
+function getPenalitaLine(penalita) {
+  if (!penalita || penalita.trim() === '' || penalita.trim().toLowerCase() === 'nessuna')
+    return `🟢  Nessuna`;
+  return `🔴  ${penalita.trim()}`;
 }
 
 module.exports = {
@@ -57,9 +54,9 @@ module.exports = {
     if (!hasRole) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setColor(0xFF4444)
-          .setTitle('❌ Non Autorizzato')
-          .setDescription('Solo **Rep** e **Vice Rep** possono pubblicare le valutazioni settimanali.')
+          .setColor(C_RED)
+          .setTitle('❌  Non Autorizzato')
+          .setDescription(`${SEP}\n\nSolo **Rep** e **Vice Rep** possono pubblicare le valutazioni.\n\n${SEP}`)
           .setFooter({ text: 'SkyForce Ultimate Chain' })
         ],
         ephemeral: true
@@ -73,9 +70,9 @@ module.exports = {
     if (servers.length === 0) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setColor(0xFF8800)
-          .setTitle('⚠️ Nessun Server Registrato')
-          .setDescription('Non ci sono server nella chain. Aggiungine con `/aggiungi-server`.')
+          .setColor(0xE67E22)
+          .setTitle('⚠️  Nessun Server Registrato')
+          .setDescription(`${SEP}\n\nNon ci sono server nella chain.\nAggiungine con \`/aggiungi-server\`.\n\n${SEP}`)
           .setFooter({ text: 'SkyForce Ultimate Chain' })
         ],
         ephemeral: true
@@ -86,9 +83,9 @@ module.exports = {
     if (!canalePubblicazione) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setColor(0xFF8800)
-          .setTitle('⚠️ Canale Non Configurato')
-          .setDescription('Configura il canale valutazioni con `/setup-canale` prima di procedere.')
+          .setColor(0xE67E22)
+          .setTitle('⚠️  Canale Non Configurato')
+          .setDescription(`${SEP}\n\nConfigura il canale con \`/setup-canale\`.\n\n${SEP}`)
           .setFooter({ text: 'SkyForce Ultimate Chain' })
         ],
         ephemeral: true
@@ -98,17 +95,16 @@ module.exports = {
     // ── Messaggio iniziale ───────────────────────────────────────────────────
     await interaction.reply({
       embeds: [new EmbedBuilder()
-        .setColor(0x00D4FF)
-        .setTitle('📊 Valutazioni Settimanali — SkyForce Ultimate')
+        .setColor(C_VIOLA)
+        .setTitle('📊  Valutazioni Settimanali')
         .setDescription(
-          `Ciao **${interaction.user.username}**! 👋\n\n` +
           `${SEP}\n\n` +
-          `Stai per compilare le valutazioni per **${servers.length} server** della chain.\n\n` +
-          `Per ogni server ti verrà chiesto:\n` +
-          `> 🤝  Partnership effettuate\n` +
-          `> ⚠️  Penalità aggiuntive (se presenti)\n\n` +
-          `📌  Minimo settimanale: **${minimo} partnership**\n` +
-          `📊  Gli UP vengono calcolati automaticamente.\n\n` +
+          `👋  Ciao **${interaction.user.username}**!\n\n` +
+          `Stai per compilare le valutazioni per **${servers.length} server**.\n\n` +
+          `${SEP_THIN}\n\n` +
+          `> 🤝  Partnership effettuate per ogni server\n` +
+          `> 🔮  Gli UP vengono calcolati automaticamente\n` +
+          `> 📌  Minimo settimanale: **${minimo} partnership**\n\n` +
           `${SEP}`
         )
         .setFooter({ text: `SkyForce Ultimate Chain  •  ${servers.length} server da valutare` })
@@ -117,13 +113,12 @@ module.exports = {
       components: [new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`val_start_${interaction.user.id}`)
-          .setLabel('📝 Inizia Valutazioni')
+          .setLabel('📝  Inizia Valutazioni')
           .setStyle(ButtonStyle.Primary)
       )],
       ephemeral: true
     });
 
-    // ── Aspetta click bottone ────────────────────────────────────────────────
     let btnInteraction;
     try {
       btnInteraction = await interaction.channel.awaitMessageComponent({
@@ -137,7 +132,6 @@ module.exports = {
 
     await interaction.editReply({ components: [] }).catch(() => {});
 
-    // ── Loop su ogni server ──────────────────────────────────────────────────
     const risultati        = [];
     let currentInteraction = btnInteraction;
 
@@ -153,7 +147,7 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('partnership')
-            .setLabel('Partnership effettuate')       // 24 char ✅
+            .setLabel('Partnership effettuate')
             .setStyle(TextInputStyle.Short)
             .setPlaceholder(`Es: 42  (minimo: ${minimo})`)
             .setMinLength(1)
@@ -181,43 +175,38 @@ module.exports = {
         });
       } catch {
         await interaction.editReply({
-          embeds: [new EmbedBuilder()
-            .setColor(0xFF4444)
-            .setTitle('⏰ Tempo Scaduto')
-            .setDescription('Hai impiegato troppo tempo. Riusa `/valutazione` per ricominciare.')
-          ],
+          embeds: [new EmbedBuilder().setColor(C_RED).setTitle('⏰  Tempo Scaduto').setDescription('Riusa `/valutazione` per ricominciare.')],
           components: []
         }).catch(() => {});
         return;
       }
 
-      const partnership  = parseInt(modalSubmit.fields.getTextInputValue('partnership').trim()) || 0;
-      const penalita     = modalSubmit.fields.getTextInputValue('penalita').trim();
-
-      // ── Calcolo automatico UP ────────────────────────────────────────────
+      const partnership = parseInt(modalSubmit.fields.getTextInputValue('partnership').trim()) || 0;
+      const penalita    = modalSubmit.fields.getTextInputValue('penalita').trim();
       const upCalcolati = calcolaUP(partnership);
+      const colPreview  = upCalcolati >= 0 ? C_GREEN : C_RED;
+      const soglia      = partnership >= minimo ? '✅' : '⚠️';
 
       risultati.push({ srv, partnership, upCalcolati, penalita });
 
-      // ── Preview calcolo UP per il compilatore ────────────────────────────
-      const previewColor = upCalcolati >= 0 ? 0x00CC44 : 0xFF4444;
-      const previewDesc  =
+      const previewDesc =
+        `${SEP_THIN}\n\n` +
         `🏠  **${srv.nome}**\n` +
-        `🤝  Partnership: **${partnership}** / ${minimo} minimo\n` +
-        `${getUPLabel(upCalcolati)}\n` +
-        `⚠️  Penalità extra: ${getMedagliaPenalita(penalita)}\n\n`;
+        `🤝  Partnership: **${partnership}** ${soglia}\n` +
+        `${getUPLine(upCalcolati)}\n` +
+        `⚠️  Penalità extra: ${getPenalitaLine(penalita)}\n\n` +
+        `${SEP_THIN}`;
 
       if (!isLast) {
         await modalSubmit.reply({
           embeds: [new EmbedBuilder()
-            .setColor(previewColor)
-            .setTitle(`✅ ${srv.nome.slice(0, 40)} — Salvato`)
+            .setColor(colPreview)
+            .setTitle(`✅  ${srv.nome.slice(0, 35)} — Salvato`)
             .setDescription(
-              `${previewDesc}` +
               `${SEP}\n\n` +
-              `**${i + 1} / ${servers.length}** completati\n\n` +
-              `> Prossimo server:\n` +
-              `> 🏠  **${servers[i + 1].nome}**\n\n` +
+              previewDesc + `\n\n` +
+              `**${i + 1} / ${servers.length}** completati\n` +
+              `▸  Prossimo: **${servers[i + 1].nome}**\n\n` +
               `${SEP}`
             )
             .setFooter({ text: 'SkyForce Ultimate Chain  •  Valutazioni in corso...' })
@@ -225,7 +214,7 @@ module.exports = {
           components: [new ActionRowBuilder().addComponents(
             new ButtonBuilder()
               .setCustomId(`val_next_${interaction.user.id}_${i}`)
-              .setLabel(`➡️ Continua (${i + 2} / ${servers.length})`)
+              .setLabel(`➡️  Continua (${i + 2} / ${servers.length})`)
               .setStyle(ButtonStyle.Primary)
           )],
           ephemeral: true
@@ -240,11 +229,7 @@ module.exports = {
         } catch {
           await modalSubmit.editReply({ components: [] }).catch(() => {});
           await interaction.followUp({
-            embeds: [new EmbedBuilder()
-              .setColor(0xFF4444)
-              .setTitle('⏰ Sessione Scaduta')
-              .setDescription('Riusa `/valutazione` per ricominciare.')
-            ],
+            embeds: [new EmbedBuilder().setColor(C_RED).setTitle('⏰  Sessione Scaduta').setDescription('Riusa `/valutazione` per ricominciare.')],
             ephemeral: true
           }).catch(() => {});
           return;
@@ -252,12 +237,14 @@ module.exports = {
       } else {
         await modalSubmit.reply({
           embeds: [new EmbedBuilder()
-            .setColor(previewColor)
-            .setTitle(`✅ ${srv.nome.slice(0, 40)} — Salvato`)
+            .setColor(colPreview)
+            .setTitle(`✅  ${srv.nome.slice(0, 35)} — Salvato`)
             .setDescription(
-              `${previewDesc}` +
               `${SEP}\n\n` +
-              `Sto pubblicando le valutazioni nel canale...`
+              previewDesc + `\n\n` +
+              `Tutti i server completati!\n` +
+              `Sto pubblicando le valutazioni...\n\n` +
+              `${SEP}`
             )
             .setFooter({ text: 'SkyForce Ultimate Chain' })
           ],
@@ -266,23 +253,21 @@ module.exports = {
       }
     }
 
-    // ── Ordina per partnership (classifica) ──────────────────────────────────
+    // ── Ordina e aggiorna UP ─────────────────────────────────────────────────
     risultati.sort((a, b) => b.partnership - a.partnership);
 
-    // ── Aggiorna UP nel db ───────────────────────────────────────────────────
     const dbFresh = readDB();
     if (!dbFresh.up) dbFresh.up = { messageId: null, channelId: null, scores: {} };
 
     for (const { srv, upCalcolati } of risultati) {
       if (!(srv.nome in dbFresh.up.scores)) dbFresh.up.scores[srv.nome] = 0;
       dbFresh.up.scores[srv.nome] += upCalcolati;
-      // Evita che gli UP vadano sotto 0
       if (dbFresh.up.scores[srv.nome] < 0) dbFresh.up.scores[srv.nome] = 0;
     }
     writeDB(dbFresh);
     await aggiornaUPPanel(interaction.client);
 
-    // ── Costruisce embed valutazioni ─────────────────────────────────────────
+    // ── Embed valutazioni ────────────────────────────────────────────────────
     const now = new Date();
     const settimana = now.toLocaleDateString('it-IT', {
       day: '2-digit', month: 'long', year: 'numeric',
@@ -291,22 +276,23 @@ module.exports = {
     const totPartnership = risultati.reduce((acc, r) => acc + r.partnership, 0);
 
     const embed = new EmbedBuilder()
-      .setColor(0xF5A623)
+      .setColor(C_VIOLA)
       .setTitle('📊  VALUTAZIONI SETTIMANALI — SKYFORCE ULTIMATE')
       .setDescription(
-        `Settimana del **${settimana}**\n` +
-        `Compilata da <@${interaction.user.id}>\n\n` +
+        `${SEP}\n\n` +
+        `📅  Settimana del **${settimana}**\n` +
+        `✍️  Compilata da <@${interaction.user.id}>\n\n` +
         `${SEP}`
       )
       .setTimestamp();
 
     for (let i = 0; i < risultati.length; i++) {
       const { srv, partnership, upCalcolati, penalita } = risultati[i];
-      const medaglia  = i < 3 ? MEDAGLIE[i] : `**${i + 1}.**`;
-      const upTotali  = dbFresh.up.scores[srv.nome] ?? 0;
-      const upLabel   = upCalcolati >= 0 ? `+${upCalcolati}` : `${upCalcolati}`;
-      const upEmoji   = upCalcolati >= 0 ? '📈' : '📉';
-      const soglia    = partnership >= minimo ? '✅' : '⚠️';
+      const medaglia = i < 3 ? MEDAGLIE[i] : `\`${i + 1}.\``;
+      const upTotali = dbFresh.up.scores[srv.nome] ?? 0;
+      const upLabel  = upCalcolati >= 0 ? `+${upCalcolati}` : `${upCalcolati}`;
+      const upEmoji  = upCalcolati >= 0 ? '📈' : '📉';
+      const soglia   = partnership >= minimo ? '✅' : '⚠️';
 
       embed.addFields({
         name: `${medaglia}  ${srv.nome}`,
@@ -314,17 +300,17 @@ module.exports = {
           `🤝  Partnership: **${partnership}** ${soglia}\n` +
           `${upEmoji}  UP Settimana: **${upLabel}**\n` +
           `🏆  UP Totali: **${upTotali}**\n` +
-          `⚠️  Penalità extra: ${getMedagliaPenalita(penalita)}\n` +
+          `⚠️  Penalità extra: ${getPenalitaLine(penalita)}\n` +
           `\u200B`,
         inline: false
       });
     }
 
     embed.addFields(
-      { name: `${SEP}`, value: '\u200B', inline: false },
-      { name: '📊  Partnership Totali Chain', value: `**${totPartnership}**`, inline: true },
-      { name: '🏠  Server Valutati',          value: `**${risultati.length}**`, inline: true },
-      { name: '📌  Minimo Settimanale',        value: `**${minimo}** partnership`, inline: true }
+      { name: SEP_THIN,                        value: '\u200B',                    inline: false },
+      { name: '🤝  Partnership Totali',         value: `**${totPartnership}**`,     inline: true  },
+      { name: '🏠  Server Valutati',            value: `**${risultati.length}**`,   inline: true  },
+      { name: '📌  Minimo Settimanale',         value: `**${minimo}** partner`,     inline: true  }
     );
 
     embed.setFooter({ text: 'SkyForce Ultimate Chain  •  Valutazioni Settimanali' });
@@ -334,11 +320,13 @@ module.exports = {
 
     await interaction.followUp({
       embeds: [new EmbedBuilder()
-        .setColor(0x00FF88)
-        .setTitle('🚀 Valutazioni Pubblicate!')
+        .setColor(C_GREEN)
+        .setTitle('🚀  Valutazioni Pubblicate!')
         .setDescription(
+          `${SEP}\n\n` +
           `Le valutazioni di **${risultati.length} server** sono state pubblicate in <#${canalePubblicazione}>.\n` +
-          `Il pannello UP è stato aggiornato automaticamente.`
+          `Il pannello UP è stato aggiornato automaticamente.\n\n` +
+          `${SEP}`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain' })
         .setTimestamp()
