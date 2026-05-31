@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { readDB } = require('../utils/database');
 
 function startReminderScheduler(client) {
+  // 10:00 ora italiana
   cron.schedule('0 8,9 * * 0', async () => {
     const oraItaliana = new Intl.DateTimeFormat('it-IT', {
       hour: 'numeric', timeZone: 'Europe/Rome'
@@ -11,6 +12,7 @@ function startReminderScheduler(client) {
     await sendReminder(client);
   });
 
+  // 17:00 ora italiana
   cron.schedule('0 15,16 * * 0', async () => {
     const oraItaliana = new Intl.DateTimeFormat('it-IT', {
       hour: 'numeric', timeZone: 'Europe/Rome'
@@ -22,16 +24,24 @@ function startReminderScheduler(client) {
   console.log('✅ Scheduler reminder domenicale attivo.');
 }
 
+// Costruisce il ping: ruolo di ogni server + eventuali owner senza ruolo
 function buildPingString(db) {
   const parts = [];
-  for (const [, s] of Object.entries(db.servers)) {
-    if (s.roleId) {
-      parts.push(`<@&${s.roleId}>`);
-    } else {
-      const ids = Array.isArray(s.ownerIds) ? s.ownerIds : [s.ownerId];
-      ids.forEach(id => parts.push(`<@${id}>`));
+  const servers = Object.entries(db.servers);
+
+  if (servers.length > 0) {
+    for (const [, s] of servers) {
+      if (s.roleId) {
+        // Pinga il ruolo del server
+        parts.push(`<@&${s.roleId}>`);
+      } else {
+        // Fallback: pinga gli owner individualmente se non c'è il ruolo
+        const ids = Array.isArray(s.ownerIds) ? s.ownerIds : [s.ownerId];
+        ids.forEach(id => parts.push(`<@${id}>`));
+      }
     }
   }
+
   return parts.join(' ');
 }
 
@@ -48,6 +58,8 @@ async function sendReminder(client) {
     console.log('⚠️ Canale reminder non trovato.');
     return;
   }
+
+  const pingString = buildPingString(db);
 
   const embed = new EmbedBuilder()
     .setColor(0x00D4FF)
@@ -72,7 +84,7 @@ async function sendReminder(client) {
   );
 
   await channel.send({
-    content: buildPingString(db) || undefined,
+    content: pingString || undefined,
     embeds: [embed],
     components: [button]
   });
@@ -87,6 +99,8 @@ async function sendFinalReminder(client) {
 
   const channel = await client.channels.fetch(db.reminderChannel).catch(() => null);
   if (!channel) return;
+
+  const pingString = buildPingString(db);
 
   const embed = new EmbedBuilder()
     .setColor(0xFF8800)
@@ -108,7 +122,7 @@ async function sendFinalReminder(client) {
   );
 
   await channel.send({
-    content: buildPingString(db) || undefined,
+    content: pingString || undefined,
     embeds: [embed],
     components: [button]
   });

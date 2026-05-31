@@ -8,6 +8,7 @@ const {
   ComponentType
 } = require('discord.js');
 const { readDB } = require('../utils/database');
+const { startReminderScheduler } = require('../utils/scheduler');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -72,8 +73,14 @@ module.exports = {
 
       await interaction.deferReply({ ephemeral: true });
 
+      // Importa le funzioni interne dallo scheduler
+      const scheduler = require('../utils/scheduler');
+
+      // Chiama direttamente le funzioni esportate tramite un trick:
+      // le richiamiamo reinjectando il client
       const client = interaction.client;
 
+      // Costruiamo il ping string manualmente
       const parts = [];
       for (const [, s] of Object.entries(db.servers)) {
         if (s.roleId) parts.push(`<@&${s.roleId}>`);

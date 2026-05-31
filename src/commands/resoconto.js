@@ -51,7 +51,7 @@ module.exports = {
 
     const [, serverData] = serverEntries[0];
 
-    // ── Step 1: Bottone "Inizia Resoconto" ───────────────────────────────────
+    // ── Step 1: Mostra bottone "Inizia Resoconto" ───────────────────────────
     await interaction.reply({
       embeds: [new EmbedBuilder()
         .setColor(0x00D4FF)
@@ -60,7 +60,7 @@ module.exports = {
           `Benvenuto **${interaction.user.username}**!\n\n` +
           `Stai compilando il resoconto per:\n` +
           `🏠 **${serverData.nome}**\n\n` +
-          `**Step 1/3** — Clicca il bottone per iniziare.`
+          `**Step 1/3** — Clicca per inserire il numero di partnership.`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
         .setTimestamp()
@@ -74,7 +74,7 @@ module.exports = {
       ephemeral: true
     });
 
-    // ── Aspetta click bottone ────────────────────────────────────────────────
+    // ── Aspetta click bottone ───────────────────────────────────────────────
     let btnInteraction;
     try {
       btnInteraction = await interaction.channel.awaitMessageComponent({
@@ -86,8 +86,7 @@ module.exports = {
       return;
     }
 
-    // ── Modal 1: Partnership ─────────────────────────────────────────────────
-    // NOTA: label max 45 caratteri su Discord
+    // ── Modal 1: Partnership ────────────────────────────────────────────────
     const modal1 = new ModalBuilder()
       .setCustomId(`partnership_modal_${interaction.user.id}`)
       .setTitle('Resoconto — Partnership');
@@ -96,7 +95,7 @@ module.exports = {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('partnership')
-          .setLabel('Partnership fatte questa settimana?')   // ≤45 caratteri
+          .setLabel('Quante partnership hai fatto questa settimana?')
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('Es: 3')
           .setMinLength(1)
@@ -106,9 +105,11 @@ module.exports = {
     );
 
     await btnInteraction.showModal(modal1);
+
+    // Rimuovi il bottone dal messaggio originale
     await interaction.editReply({ components: [] }).catch(() => {});
 
-    // ── Aspetta submit Modal 1 ───────────────────────────────────────────────
+    // ── Aspetta submit Modal 1 ──────────────────────────────────────────────
     let modalSubmit1;
     try {
       modalSubmit1 = await btnInteraction.awaitModalSubmit({
@@ -125,13 +126,13 @@ module.exports = {
 
     const partnership = modalSubmit1.fields.getTextInputValue('partnership').trim();
 
-    // ── Step 2: Menu valutazione ─────────────────────────────────────────────
+    // ── Step 2: Menu valutazione ────────────────────────────────────────────
     await modalSubmit1.reply({
       embeds: [new EmbedBuilder()
         .setColor(0x00D4FF)
         .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
         .setDescription(
-          `**Step 2/3** — Come reputi l'attività del tuo server?\n\n` +
+          `**Step 2/3** — Come reputi l'attività del tuo server questa settimana?\n\n` +
           `🤝 Partnership: **${partnership}**`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
@@ -143,7 +144,7 @@ module.exports = {
           .setPlaceholder('Seleziona la valutazione...')
           .addOptions([
             new StringSelectMenuOptionBuilder().setLabel('🔴 SCARSA')      .setDescription('Poca attività, pochi progressi').setValue('SCARSA'),
-            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media').setValue('SUFFICIENTE'),
+            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, margine di miglioramento').setValue('SUFFICIENTE'),
             new StringSelectMenuOptionBuilder().setLabel('🟢 BUONA')       .setDescription('Buona attività, obiettivi raggiunti').setValue('BUONA'),
             new StringSelectMenuOptionBuilder().setLabel('🌟 OTTIMA')      .setDescription('Settimana eccellente, grandi risultati!').setValue('OTTIMA'),
           ])
@@ -151,7 +152,7 @@ module.exports = {
       ephemeral: true
     });
 
-    // ── Aspetta selezione menu ───────────────────────────────────────────────
+    // ── Aspetta selezione menu ──────────────────────────────────────────────
     let selectInteraction;
     try {
       selectInteraction = await interaction.channel.awaitMessageComponent({
@@ -165,7 +166,7 @@ module.exports = {
 
     const valutazione = selectInteraction.values[0];
 
-    // ── Modal 2: Miglioramento ───────────────────────────────────────────────
+    // ── Modal 2: Miglioramento (opzionale) ──────────────────────────────────
     const modal2 = new ModalBuilder()
       .setCustomId(`miglioramento_modal_${interaction.user.id}`)
       .setTitle('Resoconto — Miglioramento');
@@ -174,7 +175,7 @@ module.exports = {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('miglioramento')
-          .setLabel('Come migliorerai? (opzionale)')          // ≤45 caratteri
+          .setLabel('Cosa farai per migliorare? (opzionale)')
           .setStyle(TextInputStyle.Paragraph)
           .setPlaceholder('Descrivi i tuoi piani per la prossima settimana...')
           .setMaxLength(1000)
@@ -183,9 +184,11 @@ module.exports = {
     );
 
     await selectInteraction.showModal(modal2);
+
+    // Rimuovi il menu
     await modalSubmit1.editReply({ components: [] }).catch(() => {});
 
-    // ── Aspetta submit Modal 2 ───────────────────────────────────────────────
+    // ── Aspetta submit Modal 2 ──────────────────────────────────────────────
     let modalSubmit2;
     try {
       modalSubmit2 = await selectInteraction.awaitModalSubmit({
@@ -202,7 +205,7 @@ module.exports = {
 
     const miglioramento = modalSubmit2.fields.getTextInputValue('miglioramento').trim();
 
-    // ── Embed finale ─────────────────────────────────────────────────────────
+    // ── Costruisci embed finale ─────────────────────────────────────────────
     const valutazioneMap = {
       'SCARSA':      '🔴 SCARSA',
       'SUFFICIENTE': '🟡 SUFFICIENTE',
@@ -240,14 +243,23 @@ module.exports = {
       .setTimestamp();
 
     if (miglioramento.length > 0) {
-      resocontoEmbed.addFields({ name: '💡 Piano di Miglioramento', value: miglioramento, inline: false });
+      resocontoEmbed.addFields({
+        name: '💡 Piano di Miglioramento',
+        value: miglioramento,
+        inline: false
+      });
     }
 
-    // ── Invia nel canale resoconti ───────────────────────────────────────────
-    const canaleResoconto = await interaction.guild.channels.fetch(db.resocontoChannel).catch(() => null);
-    if (canaleResoconto) await canaleResoconto.send({ embeds: [resocontoEmbed] });
+    // ── Invia nel canale resoconti ──────────────────────────────────────────
+    const canaleResoconto = await interaction.guild.channels
+      .fetch(db.resocontoChannel)
+      .catch(() => null);
 
-    // ── Conferma all'utente ──────────────────────────────────────────────────
+    if (canaleResoconto) {
+      await canaleResoconto.send({ embeds: [resocontoEmbed] });
+    }
+
+    // ── Conferma all'utente ─────────────────────────────────────────────────
     await modalSubmit2.reply({
       embeds: [new EmbedBuilder()
         .setColor(0x00FF88)

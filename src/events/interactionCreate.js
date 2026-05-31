@@ -16,19 +16,6 @@ module.exports = {
       return;
     }
 
-    // ── Autocomplete (per up-aggiungi, up-rimuovi) ───────────────────────────
-    if (interaction.isAutocomplete()) {
-      const command = interaction.client.commands.get(interaction.commandName);
-      if (command?.autocomplete) {
-        try {
-          await command.autocomplete(interaction);
-        } catch (err) {
-          console.error(`Errore autocomplete /${interaction.commandName}:`, err.message);
-        }
-      }
-      return;
-    }
-
     // ── Ignora tutto ciò che non è un comando slash ──────────────────────────
     if (!interaction.isChatInputCommand()) return;
 
@@ -54,6 +41,7 @@ module.exports = {
     } catch (error) {
       console.error(`Errore nel comando ${interaction.commandName}:`, error);
 
+      // Log errore (fire-and-forget)
       logger.errore(
         `Errore Comando /${interaction.commandName}`,
         `\`\`\`${error.message}\`\`\``,
@@ -64,6 +52,7 @@ module.exports = {
         ]
       ).catch(() => {});
 
+      // Risposta di errore all'utente — non crashare se l'interazione è scaduta
       try {
         const errMsg = {
           content: '❌ Si è verificato un errore nell\'esecuzione del comando.',

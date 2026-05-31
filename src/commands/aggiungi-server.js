@@ -36,13 +36,16 @@ module.exports = {
     const owner3   = interaction.options.getUser('owner3');
     const idServer = interaction.options.getString('id_server') || 'Non specificato';
 
+    // Nome preso automaticamente dal nome del ruolo
     const nome = ruolo.name;
 
+    // Raccoglie gli owner unici
     const owners = [owner1, owner2, owner3].filter(Boolean);
     const uniqueOwners = [...new Map(owners.map(u => [u.id, u])).values()];
 
     const db = readDB();
 
+    // Controlla che il ruolo non sia già registrato
     for (const [, srv] of Object.entries(db.servers)) {
       if (srv.roleId === ruolo.id) {
         return interaction.reply({
@@ -56,6 +59,7 @@ module.exports = {
       }
     }
 
+    // Controlla che nessun owner sia già assegnato ad un altro server
     for (const owner of uniqueOwners) {
       for (const [, srv] of Object.entries(db.servers)) {
         const ids = Array.isArray(srv.ownerIds) ? srv.ownerIds : [srv.ownerId];

@@ -11,8 +11,9 @@ module.exports = {
         .setDescription('Tipo di canale da configurare')
         .setRequired(true)
         .addChoices(
-          { name: '📋 Canale Resoconti — dove vengono inviati i resoconti compilati', value: 'resoconto' },
-          { name: '🔔 Canale Reminder — dove il bot manda il reminder domenicale',    value: 'reminder'  }
+          { name: '📋 Canale Resoconti — dove arrivano i resoconti settimanali',     value: 'resoconto'    },
+          { name: '📊 Canale Valutazioni — dove arrivano le valutazioni settimanali', value: 'valutazione'  },
+          { name: '🔔 Canale Reminder — dove il bot manda il reminder domenicale',    value: 'reminder'     }
         ))
     .addChannelOption(opt =>
       opt.setName('canale')
@@ -20,12 +21,10 @@ module.exports = {
         .setRequired(true))
     .addRoleOption(opt =>
       opt.setName('ruolo_ping')
-        .setDescription('Ruolo da pingare nei reminder (opzionale)')
+        .setDescription('Ruolo da pingare nei reminder (solo per il canale reminder)')
         .setRequired(false)),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
-
     const tipo      = interaction.options.getString('tipo');
     const canale    = interaction.options.getChannel('canale');
     const ruoloPing = interaction.options.getRole('ruolo_ping');
@@ -34,6 +33,8 @@ module.exports = {
 
     if (tipo === 'resoconto') {
       db.resocontoChannel = canale.id;
+    } else if (tipo === 'valutazione') {
+      db.valutazioneChannel = canale.id;
     } else {
       db.reminderChannel = canale.id;
       if (ruoloPing) db.reminderPingRole = ruoloPing.id;
@@ -42,24 +43,27 @@ module.exports = {
     writeDB(db);
 
     const nomi = {
-      resoconto: '📋 Canale Resoconti',
-      reminder:  '🔔 Canale Reminder'
+      resoconto:   '📋 Canale Resoconti',
+      valutazione: '📊 Canale Valutazioni',
+      reminder:    '🔔 Canale Reminder'
     };
 
     let desc = `**${nomi[tipo]}** impostato su <#${canale.id}>`;
     if (tipo === 'reminder' && ruoloPing) {
-      desc += `\n🏷️ **Ruolo ping reminder:** <@&${ruoloPing.id}>`;
+      desc += `\n🏷️ **Ruolo ping:** <@&${ruoloPing.id}>`;
     } else if (tipo === 'reminder' && db.reminderPingRole) {
       desc += `\n🏷️ **Ruolo ping attuale:** <@&${db.reminderPingRole}>`;
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(0x00FF88)
-      .setTitle('✅ Canale Configurato')
-      .setDescription(desc)
-      .setFooter({ text: 'SkyForce Ultimate Chain' })
-      .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x00FF88)
+        .setTitle('✅ Canale Configurato')
+        .setDescription(desc)
+        .setFooter({ text: 'SkyForce Ultimate Chain' })
+        .setTimestamp()
+      ],
+      ephemeral: true
+    });
   }
 };
