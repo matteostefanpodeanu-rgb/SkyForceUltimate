@@ -1,7 +1,7 @@
 {
   "servers": {},
   "resocontoChannel": "1508572547224961116",
-  "reminderChannel": null,
+  "reminderChannel": "1508572357370052748",
   "valutazioniChannel": null,
   "logChannel": "1508565544071069858",
   "up": {
@@ -10,5 +10,6 @@
     "scores": {}
   },
   "valutazioni": [],
-  "valutazioneChannel": "1506014308855971981"
+  "valutazioneChannel": "1506014308855971981",
+  "reminderPingRole": "1509612719056228382"
 }
