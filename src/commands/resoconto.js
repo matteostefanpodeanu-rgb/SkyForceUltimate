@@ -11,6 +11,20 @@ const {
   TextInputStyle,
 } = require('discord.js');
 const { readDB } = require('../utils/database');
+const { C_VIOLA, C_RED, C_GREEN, SEP } = require('../utils/upPanel');
+
+const COLORI_VALUTAZIONE = {
+  'SCARSA':      0xE74C3C,
+  'SUFFICIENTE': 0xE67E22,
+  'BUONA':       0x2ECC71,
+  'OTTIMA':      C_VIOLA
+};
+const LABEL_VALUTAZIONE = {
+  'SCARSA':      '🔴  SCARSA',
+  'SUFFICIENTE': '🟡  SUFFICIENTE',
+  'BUONA':       '🟢  BUONA',
+  'OTTIMA':      '🌟  OTTIMA'
+};
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,9 +43,9 @@ module.exports = {
     if (serverEntries.length === 0) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setColor(0xFF4444)
-          .setTitle('❌ Non Autorizzato')
-          .setDescription('Non sei associato a nessun server della chain.\nContatta un amministratore per essere aggiunto.')
+          .setColor(C_RED)
+          .setTitle('❌  Non Autorizzato')
+          .setDescription(`${SEP}\n\nNon sei associato a nessun server della chain.\nContatta un amministratore.\n\n${SEP}`)
           .setFooter({ text: 'SkyForce Ultimate Chain' })
         ],
         ephemeral: true
@@ -41,40 +55,42 @@ module.exports = {
     if (!db.resocontoChannel) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setColor(0xFF8800)
-          .setTitle('⚠️ Configurazione Mancante')
-          .setDescription('Il canale dei resoconti non è stato configurato.\nChiedi a un amministratore di usare `/setup-canale`.')
+          .setColor(0xE67E22)
+          .setTitle('⚠️  Configurazione Mancante')
+          .setDescription(`${SEP}\n\nIl canale resoconti non è configurato.\nChiedi a un admin di usare \`/setup-canale\`.\n\n${SEP}`)
         ],
         ephemeral: true
       });
     }
 
     const [, serverData] = serverEntries[0];
+    const minimo = db.minimoPartnership ?? 35;
 
-    // ── Step 1: Mostra bottone "Inizia Resoconto" ───────────────────────────
+    // ── Step 1 ───────────────────────────────────────────────────────────────
     await interaction.reply({
       embeds: [new EmbedBuilder()
-        .setColor(0x00D4FF)
-        .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
+        .setColor(C_VIOLA)
+        .setTitle('📊  Resoconto Settimanale')
         .setDescription(
-          `Benvenuto **${interaction.user.username}**!\n\n` +
-          `Stai compilando il resoconto per:\n` +
-          `🏠 **${serverData.nome}**\n\n` +
-          `**Step 1/3** — Clicca per inserire le partnership.`
+          `${SEP}\n\n` +
+          `👋  Ciao **${interaction.user.username}**!\n\n` +
+          `🏠  Server: **${serverData.nome}**\n` +
+          `📌  Minimo partnership: **${minimo}**\n\n` +
+          `${SEP}\n\n` +
+          `Clicca il bottone per iniziare.`
         )
-        .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
+        .setFooter({ text: 'SkyForce Ultimate Chain  •  Resoconto Settimanale' })
         .setTimestamp()
       ],
       components: [new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`apri_modal_${interaction.user.id}`)
-          .setLabel('📝 Inizia Resoconto')
+          .setLabel('📝  Inizia Resoconto')
           .setStyle(ButtonStyle.Primary)
       )],
       ephemeral: true
     });
 
-    // ── Aspetta click bottone ───────────────────────────────────────────────
     let btnInteraction;
     try {
       btnInteraction = await interaction.channel.awaitMessageComponent({
@@ -86,7 +102,7 @@ module.exports = {
       return;
     }
 
-    // ── Modal 1: Partnership ────────────────────────────────────────────────
+    // ── Modal 1: Partnership ─────────────────────────────────────────────────
     const modal1 = new ModalBuilder()
       .setCustomId(`partnership_modal_${interaction.user.id}`)
       .setTitle('Resoconto — Partnership');
@@ -95,10 +111,9 @@ module.exports = {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('partnership')
-          // FIX: era 46 caratteri, limite Discord = 45
           .setLabel('Partnership fatte questa settimana?')  // 38 char ✅
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Es: 3')
+          .setPlaceholder(`Es: 42  (minimo: ${minimo})`)
           .setMinLength(1)
           .setMaxLength(4)
           .setRequired(true)
@@ -106,11 +121,8 @@ module.exports = {
     );
 
     await btnInteraction.showModal(modal1);
-
-    // Rimuovi il bottone dal messaggio originale
     await interaction.editReply({ components: [] }).catch(() => {});
 
-    // ── Aspetta submit Modal 1 ──────────────────────────────────────────────
     let modalSubmit1;
     try {
       modalSubmit1 = await btnInteraction.awaitModalSubmit({
@@ -119,24 +131,28 @@ module.exports = {
       });
     } catch {
       await interaction.editReply({
-        embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
+        embeds: [new EmbedBuilder().setColor(C_RED).setTitle('⏰  Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
         components: []
       }).catch(() => {});
       return;
     }
 
     const partnership = modalSubmit1.fields.getTextInputValue('partnership').trim();
+    const partNum     = parseInt(partnership) || 0;
+    const soglia      = partNum >= minimo ? `✅  sopra il minimo` : `⚠️  sotto il minimo (${minimo})`;
 
-    // ── Step 2: Menu valutazione ────────────────────────────────────────────
+    // ── Step 2: Valutazione ──────────────────────────────────────────────────
     await modalSubmit1.reply({
       embeds: [new EmbedBuilder()
-        .setColor(0x00D4FF)
-        .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
+        .setColor(C_VIOLA)
+        .setTitle('📊  Resoconto — Step 2/3')
         .setDescription(
-          `**Step 2/3** — Come reputi l'attività del tuo server?\n\n` +
-          `🤝 Partnership: **${partnership}**`
+          `${SEP}\n\n` +
+          `🤝  Partnership dichiarate: **${partnership}**  —  ${soglia}\n\n` +
+          `${SEP}\n\n` +
+          `Come valuti l'attività del tuo server questa settimana?`
         )
-        .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
+        .setFooter({ text: 'SkyForce Ultimate Chain  •  Resoconto Settimanale' })
         .setTimestamp()
       ],
       components: [new ActionRowBuilder().addComponents(
@@ -145,8 +161,7 @@ module.exports = {
           .setPlaceholder('Seleziona la valutazione...')
           .addOptions([
             new StringSelectMenuOptionBuilder().setLabel('🔴 SCARSA')      .setDescription('Poca attività, pochi progressi').setValue('SCARSA'),
-            // FIX: era 47 caratteri, limite = 45
-            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, da migliorare').setValue('SUFFICIENTE'),  // 36 char ✅
+            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, da migliorare').setValue('SUFFICIENTE'),
             new StringSelectMenuOptionBuilder().setLabel('🟢 BUONA')       .setDescription('Buona attività, obiettivi raggiunti').setValue('BUONA'),
             new StringSelectMenuOptionBuilder().setLabel('🌟 OTTIMA')      .setDescription('Settimana eccellente, grandi risultati!').setValue('OTTIMA'),
           ])
@@ -154,7 +169,6 @@ module.exports = {
       ephemeral: true
     });
 
-    // ── Aspetta selezione menu ──────────────────────────────────────────────
     let selectInteraction;
     try {
       selectInteraction = await interaction.channel.awaitMessageComponent({
@@ -168,7 +182,7 @@ module.exports = {
 
     const valutazione = selectInteraction.values[0];
 
-    // ── Modal 2: Miglioramento (opzionale) ──────────────────────────────────
+    // ── Modal 2: Miglioramento ───────────────────────────────────────────────
     const modal2 = new ModalBuilder()
       .setCustomId(`miglioramento_modal_${interaction.user.id}`)
       .setTitle('Resoconto — Miglioramento');
@@ -186,11 +200,8 @@ module.exports = {
     );
 
     await selectInteraction.showModal(modal2);
-
-    // Rimuovi il menu
     await modalSubmit1.editReply({ components: [] }).catch(() => {});
 
-    // ── Aspetta submit Modal 2 ──────────────────────────────────────────────
     let modalSubmit2;
     try {
       modalSubmit2 = await selectInteraction.awaitModalSubmit({
@@ -199,7 +210,7 @@ module.exports = {
       });
     } catch {
       await modalSubmit1.editReply({
-        embeds: [new EmbedBuilder().setColor(0xFF4444).setTitle('⏰ Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
+        embeds: [new EmbedBuilder().setColor(C_RED).setTitle('⏰  Tempo Scaduto').setDescription('Riusa `/resoconto` per ricominciare.')],
         components: []
       }).catch(() => {});
       return;
@@ -207,23 +218,10 @@ module.exports = {
 
     const miglioramento = modalSubmit2.fields.getTextInputValue('miglioramento').trim();
 
-    // Defer subito per evitare Unknown Interaction (timeout 3s Discord)
+    // Defer prima di operazioni pesanti
     await modalSubmit2.deferReply({ ephemeral: true });
 
-    // ── Costruisci embed finale ─────────────────────────────────────────────
-    const valutazioneMap = {
-      'SCARSA':      '🔴 SCARSA',
-      'SUFFICIENTE': '🟡 SUFFICIENTE',
-      'BUONA':       '🟢 BUONA',
-      'OTTIMA':      '🌟 OTTIMA'
-    };
-    const coloriMap = {
-      'SCARSA':      0xFF4444,
-      'SUFFICIENTE': 0xFFAA00,
-      'BUONA':       0x00CC44,
-      'OTTIMA':      0x00D4FF
-    };
-
+    // ── Embed finale ─────────────────────────────────────────────────────────
     const now = new Date();
     const dataItaliana = now.toLocaleDateString('it-IT', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -233,47 +231,47 @@ module.exports = {
       hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
     });
 
+    const colore = COLORI_VALUTAZIONE[valutazione] ?? C_VIOLA;
+
     const resocontoEmbed = new EmbedBuilder()
-      .setColor(coloriMap[valutazione] ?? 0x00D4FF)
-      .setTitle(`📊 Resoconto Settimanale — ${serverData.nome}`)
+      .setColor(colore)
+      .setTitle(`📊  Resoconto Settimanale — ${serverData.nome}`)
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-      .addFields(
-        { name: '🏠 Server',                 value: `**${serverData.nome}**`,                            inline: true  },
-        { name: '👑 Owner',                  value: `<@${interaction.user.id}>`,                         inline: true  },
-        { name: '📅 Data Compilazione',      value: `${dataItaliana} alle **${oraItaliana}**`,           inline: false },
-        { name: '🤝 Partnership Effettuate', value: `**${partnership}** questa settimana`,               inline: true  },
-        { name: '📈 Valutazione Attività',   value: `**${valutazioneMap[valutazione] ?? valutazione}**`, inline: true  }
+      .setDescription(
+        `${SEP}\n\n` +
+        `🏠  **${serverData.nome}**\n` +
+        `👑  <@${interaction.user.id}>\n` +
+        `📅  ${dataItaliana} alle **${oraItaliana}**\n\n` +
+        `${SEP}`
       )
-      .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
+      .addFields(
+        { name: '🤝  Partnership Effettuate', value: `**${partnership}** questa settimana`, inline: true },
+        { name: '📈  Valutazione',            value: `**${LABEL_VALUTAZIONE[valutazione] ?? valutazione}**`, inline: true }
+      )
+      .setFooter({ text: 'SkyForce Ultimate Chain  •  Resoconto Settimanale' })
       .setTimestamp();
 
     if (miglioramento.length > 0) {
       resocontoEmbed.addFields({
-        name: '💡 Piano di Miglioramento',
-        value: miglioramento.slice(0, 1024),  // FIX: tronca a 1024 char (limite embed field)
+        name: '💡  Piano di Miglioramento',
+        value: miglioramento.slice(0, 1024),
         inline: false
       });
     }
 
-    // ── Invia nel canale resoconti ──────────────────────────────────────────
-    const canaleResoconto = await interaction.guild.channels
-      .fetch(db.resocontoChannel)
-      .catch(() => null);
+    const canaleResoconto = await interaction.guild.channels.fetch(db.resocontoChannel).catch(() => null);
+    if (canaleResoconto) await canaleResoconto.send({ embeds: [resocontoEmbed] });
 
-    if (canaleResoconto) {
-      await canaleResoconto.send({ embeds: [resocontoEmbed] });
-    }
-
-    // ── Conferma all'utente ─────────────────────────────────────────────────
     await modalSubmit2.editReply({
       embeds: [new EmbedBuilder()
-        .setColor(0x00FF88)
-        .setTitle('✅ Resoconto Inviato!')
+        .setColor(C_GREEN)
+        .setTitle('✅  Resoconto Inviato!')
         .setDescription(
-          `Il tuo resoconto per **${serverData.nome}** è stato inviato!\n\n` +
-          `🤝 Partnership: **${partnership}**\n` +
-          `📊 Valutazione: **${valutazioneMap[valutazione] ?? valutazione}**\n\n` +
-          `Grazie per aver compilato il resoconto settimanale! 💪`
+          `${SEP}\n\n` +
+          `Il resoconto per **${serverData.nome}** è stato inviato con successo!\n\n` +
+          `🤝  Partnership: **${partnership}**\n` +
+          `📊  Valutazione: **${LABEL_VALUTAZIONE[valutazione] ?? valutazione}**\n\n` +
+          `${SEP}`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain' })
         .setTimestamp()
