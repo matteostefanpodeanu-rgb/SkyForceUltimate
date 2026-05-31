@@ -60,7 +60,7 @@ module.exports = {
           `Benvenuto **${interaction.user.username}**!\n\n` +
           `Stai compilando il resoconto per:\n` +
           `🏠 **${serverData.nome}**\n\n` +
-          `**Step 1/3** — Clicca per inserire il numero di partnership.`
+          `**Step 1/3** — Clicca per inserire le partnership.`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
         .setTimestamp()
@@ -95,7 +95,8 @@ module.exports = {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('partnership')
-          .setLabel('Quante partnership hai fatto questa settimana?')
+          // FIX: era 46 caratteri, limite Discord = 45
+          .setLabel('Partnership fatte questa settimana?')  // 38 char ✅
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('Es: 3')
           .setMinLength(1)
@@ -132,7 +133,7 @@ module.exports = {
         .setColor(0x00D4FF)
         .setTitle('📊 Resoconto Settimanale — SkyForce Ultimate')
         .setDescription(
-          `**Step 2/3** — Come reputi l'attività del tuo server questa settimana?\n\n` +
+          `**Step 2/3** — Come reputi l'attività del tuo server?\n\n` +
           `🤝 Partnership: **${partnership}**`
         )
         .setFooter({ text: 'SkyForce Ultimate Chain • Resoconto Settimanale' })
@@ -144,7 +145,8 @@ module.exports = {
           .setPlaceholder('Seleziona la valutazione...')
           .addOptions([
             new StringSelectMenuOptionBuilder().setLabel('🔴 SCARSA')      .setDescription('Poca attività, pochi progressi').setValue('SCARSA'),
-            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, margine di miglioramento').setValue('SUFFICIENTE'),
+            // FIX: era 47 caratteri, limite = 45
+            new StringSelectMenuOptionBuilder().setLabel('🟡 SUFFICIENTE') .setDescription('Attività nella media, da migliorare').setValue('SUFFICIENTE'),  // 36 char ✅
             new StringSelectMenuOptionBuilder().setLabel('🟢 BUONA')       .setDescription('Buona attività, obiettivi raggiunti').setValue('BUONA'),
             new StringSelectMenuOptionBuilder().setLabel('🌟 OTTIMA')      .setDescription('Settimana eccellente, grandi risultati!').setValue('OTTIMA'),
           ])
@@ -175,7 +177,7 @@ module.exports = {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('miglioramento')
-          .setLabel('Cosa farai per migliorare? (opzionale)')
+          .setLabel('Cosa farai per migliorare? (opzionale)')  // 40 char ✅
           .setStyle(TextInputStyle.Paragraph)
           .setPlaceholder('Descrivi i tuoi piani per la prossima settimana...')
           .setMaxLength(1000)
@@ -245,7 +247,7 @@ module.exports = {
     if (miglioramento.length > 0) {
       resocontoEmbed.addFields({
         name: '💡 Piano di Miglioramento',
-        value: miglioramento,
+        value: miglioramento.slice(0, 1024),  // FIX: tronca a 1024 char (limite embed field)
         inline: false
       });
     }
