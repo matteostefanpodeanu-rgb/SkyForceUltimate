@@ -16,6 +16,30 @@ const VICE_REP_ROLE_ID = '1505986264984191056';
 const MEDAGLIE         = ['🥇', '🥈', '🥉'];
 const SEP              = '━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
+// ── Tabella punti partnership ────────────────────────────────────────────────
+// Restituisce UP da aggiungere (positivi) o penalità (negativi)
+// Minimo settimanale: 35 partnership
+function calcolaUP(partnership) {
+  const p = parseInt(partnership) || 0;
+  if (p >= 150) return +25;
+  if (p >= 125) return +21;
+  if (p >= 100) return +18;
+  if (p >= 75)  return +15;
+  if (p >= 60)  return +13;
+  if (p >= 50)  return +11;
+  if (p >= 40)  return +9;
+  if (p >= 35)  return +8;   // minimo settimanale
+  if (p >= 25)  return -4;   // penalità lieve
+  if (p >= 10)  return -5;   // penalità media
+  return -6;                 // penalità grave (0–9)
+}
+
+function getUPLabel(up) {
+  if (up > 0) return `✅  **+${up} UP** (guadagnati)`;
+  if (up < 0) return `❌  **${up} UP** (penalità)`;
+  return `➖  **0 UP**`;
+}
+
 function getMedagliaPenalita(penalita) {
   if (!penalita || penalita.trim() === '' || penalita.trim().toLowerCase() === 'nessuna') return '✅  Nessuna';
   return `⚠️  ${penalita.trim()}`;
@@ -44,6 +68,7 @@ module.exports = {
 
     const db      = readDB();
     const servers = Object.values(db.servers);
+    const minimo  = db.minimoPartnership ?? 35;
 
     if (servers.length === 0) {
       return interaction.reply({
@@ -57,7 +82,6 @@ module.exports = {
       });
     }
 
-    // Usa valutazioneChannel se configurato, altrimenti resocontoChannel
     const canalePubblicazione = db.valutazioneChannel || db.resocontoChannel;
     if (!canalePubblicazione) {
       return interaction.reply({
@@ -82,8 +106,9 @@ module.exports = {
           `Stai per compilare le valutazioni per **${servers.length} server** della chain.\n\n` +
           `Per ogni server ti verrà chiesto:\n` +
           `> 🤝  Partnership effettuate\n` +
-          `> 📈  UP guadagnati\n` +
-          `> ⚠️  Penalità (se presenti)\n\n` +
+          `> ⚠️  Penalità aggiuntive (se presenti)\n\n` +
+          `📌  Minimo settimanale: **${minimo} partnership**\n` +
+          `📊  Gli UP vengono calcolati automaticamente.\n\n` +
           `${SEP}`
         )
         .setFooter({ text: `SkyForce Ultimate Chain  •  ${servers.length} server da valutare` })
@@ -128,19 +153,9 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('partnership')
-            .setLabel('Partnership effettuate')          // 24 char ✅
+            .setLabel('Partnership effettuate')       // 24 char ✅
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: 42')
-            .setMinLength(1)
-            .setMaxLength(5)
-            .setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('up_guadagnati')
-            .setLabel('UP guadagnati (numero intero)')   // 30 char ✅
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Es: 10')
+            .setPlaceholder(`Es: 42  (minimo: ${minimo})`)
             .setMinLength(1)
             .setMaxLength(5)
             .setRequired(true)
@@ -148,7 +163,7 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('penalita')
-            .setLabel('Penalità (Nessuna se assenti)')   // 30 char ✅
+            .setLabel('Penalità extra (Nessuna se ok)')  // 32 char ✅
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('Es: Nessuna  oppure  Inattività -5 UP')
             .setMaxLength(100)
@@ -176,18 +191,29 @@ module.exports = {
         return;
       }
 
-      const partnership  = parseInt(modalSubmit.fields.getTextInputValue('partnership').trim())  || 0;
-      const upGuadagnati = parseInt(modalSubmit.fields.getTextInputValue('up_guadagnati').trim()) || 0;
+      const partnership  = parseInt(modalSubmit.fields.getTextInputValue('partnership').trim()) || 0;
       const penalita     = modalSubmit.fields.getTextInputValue('penalita').trim();
 
-      risultati.push({ srv, partnership, upGuadagnati, penalita });
+      // ── Calcolo automatico UP ────────────────────────────────────────────
+      const upCalcolati = calcolaUP(partnership);
+
+      risultati.push({ srv, partnership, upCalcolati, penalita });
+
+      // ── Preview calcolo UP per il compilatore ────────────────────────────
+      const previewColor = upCalcolati >= 0 ? 0x00CC44 : 0xFF4444;
+      const previewDesc  =
+        `🏠  **${srv.nome}**\n` +
+        `🤝  Partnership: **${partnership}** / ${minimo} minimo\n` +
+        `${getUPLabel(upCalcolati)}\n` +
+        `⚠️  Penalità extra: ${getMedagliaPenalita(penalita)}\n\n`;
 
       if (!isLast) {
         await modalSubmit.reply({
           embeds: [new EmbedBuilder()
-            .setColor(0x00D4FF)
-            .setTitle(`✅ ${srv.nome} — Salvato`)
+            .setColor(previewColor)
+            .setTitle(`✅ ${srv.nome.slice(0, 40)} — Salvato`)
             .setDescription(
+              `${previewDesc}` +
               `${SEP}\n\n` +
               `**${i + 1} / ${servers.length}** completati\n\n` +
               `> Prossimo server:\n` +
@@ -226,9 +252,13 @@ module.exports = {
       } else {
         await modalSubmit.reply({
           embeds: [new EmbedBuilder()
-            .setColor(0x00FF88)
-            .setTitle('✅ Tutti i dati raccolti!')
-            .setDescription('Sto pubblicando le valutazioni nel canale...')
+            .setColor(previewColor)
+            .setTitle(`✅ ${srv.nome.slice(0, 40)} — Salvato`)
+            .setDescription(
+              `${previewDesc}` +
+              `${SEP}\n\n` +
+              `Sto pubblicando le valutazioni nel canale...`
+            )
             .setFooter({ text: 'SkyForce Ultimate Chain' })
           ],
           ephemeral: true
@@ -236,20 +266,23 @@ module.exports = {
       }
     }
 
-    // ── Aggiorna UP nel db ───────────────────────────────────────────────────
+    // ── Ordina per partnership (classifica) ──────────────────────────────────
     risultati.sort((a, b) => b.partnership - a.partnership);
 
+    // ── Aggiorna UP nel db ───────────────────────────────────────────────────
     const dbFresh = readDB();
     if (!dbFresh.up) dbFresh.up = { messageId: null, channelId: null, scores: {} };
 
-    for (const { srv, upGuadagnati } of risultati) {
+    for (const { srv, upCalcolati } of risultati) {
       if (!(srv.nome in dbFresh.up.scores)) dbFresh.up.scores[srv.nome] = 0;
-      dbFresh.up.scores[srv.nome] += upGuadagnati;
+      dbFresh.up.scores[srv.nome] += upCalcolati;
+      // Evita che gli UP vadano sotto 0
+      if (dbFresh.up.scores[srv.nome] < 0) dbFresh.up.scores[srv.nome] = 0;
     }
     writeDB(dbFresh);
     await aggiornaUPPanel(interaction.client);
 
-    // ── Costruisce embed valutazioni (design moderno) ────────────────────────
+    // ── Costruisce embed valutazioni ─────────────────────────────────────────
     const now = new Date();
     const settimana = now.toLocaleDateString('it-IT', {
       day: '2-digit', month: 'long', year: 'numeric',
@@ -268,18 +301,21 @@ module.exports = {
       .setTimestamp();
 
     for (let i = 0; i < risultati.length; i++) {
-      const { srv, partnership, upGuadagnati, penalita } = risultati[i];
-      const medaglia = i < 3 ? MEDAGLIE[i] : `**${i + 1}.**`;
-      const upTotali = dbFresh.up.scores[srv.nome] ?? 0;
+      const { srv, partnership, upCalcolati, penalita } = risultati[i];
+      const medaglia  = i < 3 ? MEDAGLIE[i] : `**${i + 1}.**`;
+      const upTotali  = dbFresh.up.scores[srv.nome] ?? 0;
+      const upLabel   = upCalcolati >= 0 ? `+${upCalcolati}` : `${upCalcolati}`;
+      const upEmoji   = upCalcolati >= 0 ? '📈' : '📉';
+      const soglia    = partnership >= minimo ? '✅' : '⚠️';
 
       embed.addFields({
         name: `${medaglia}  ${srv.nome}`,
         value:
-          `🤝  Partnership: **${partnership}**\n` +
-          `📈  UP Guadagnati: **+${upGuadagnati}**\n` +
+          `🤝  Partnership: **${partnership}** ${soglia}\n` +
+          `${upEmoji}  UP Settimana: **${upLabel}**\n` +
           `🏆  UP Totali: **${upTotali}**\n` +
-          `⚠️  Penalità: ${getMedagliaPenalita(penalita)}\n` +
-          `\u200B`,          // riga vuota tra un server e l'altro
+          `⚠️  Penalità extra: ${getMedagliaPenalita(penalita)}\n` +
+          `\u200B`,
         inline: false
       });
     }
@@ -287,7 +323,8 @@ module.exports = {
     embed.addFields(
       { name: `${SEP}`, value: '\u200B', inline: false },
       { name: '📊  Partnership Totali Chain', value: `**${totPartnership}**`, inline: true },
-      { name: '🏠  Server Valutati',          value: `**${risultati.length}**`, inline: true }
+      { name: '🏠  Server Valutati',          value: `**${risultati.length}**`, inline: true },
+      { name: '📌  Minimo Settimanale',        value: `**${minimo}** partnership`, inline: true }
     );
 
     embed.setFooter({ text: 'SkyForce Ultimate Chain  •  Valutazioni Settimanali' });
